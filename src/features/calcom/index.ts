@@ -8,15 +8,12 @@ export { calcomService } from './calcom.service.js';
 export type {
   CalcomEventType,
   CalcomSlotsResponse,
-  EventTypeOption,
-  GetSlotsByUsernameParams,
-  GetSlotsByEventTypeIdParams,
+  GetSlotsParams,
 } from './calcom.client.js';
 
 // Export service types
 export type {
   GetSlotsInput,
-  GetEventTypeSlotsInput,
   CalcomSlot,
   FormattedSlotData,
 } from './calcom.types.js';

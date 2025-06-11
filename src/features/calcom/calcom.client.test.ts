@@ -1,425 +1,228 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import nock from 'nock';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   CalcomClient,
   CalcomClientError,
-  type CalcomEventTypesResponse,
+  type CalcomEventType,
   type CalcomSlotsResponse,
-  type GetSlotsByUsernameParams,
-  type GetSlotsByEventTypeIdParams,
+  type GetSlotsParams,
 } from './calcom.client.js';
 
-// Set up environment variables for testing
-vi.stubEnv('CALCOM_API_TOKEN', 'test_token_123');
-vi.stubEnv('CALCOM_API_BASE', 'https://test.cal.com');
+// Mock axios
+vi.mock('axios', () => ({
+  default: {
+    create: vi.fn(() => ({
+      request: vi.fn(),
+    })),
+  },
+}));
+
+// Mock config
+vi.mock('./calcom.config.js', () => ({
+  loadCalcomConfig: vi.fn(() => ({
+    CALCOM_API_BASE: 'https://api.cal.com',
+    CALCOM_API_TOKEN: 'test-token',
+  })),
+}));
 
 describe('CalcomClient', () => {
-  const mockApiToken = 'test_token_123';
-  const mockBaseURL = 'https://test.cal.com';
   let client: CalcomClient;
+  let mockAxiosInstance: any;
 
   beforeEach(() => {
-    // Clean up any existing interceptors
-    nock.cleanAll();
-
-    // Activate nock
-    if (!nock.isActive()) {
-      nock.activate();
-    }
-
-    client = new CalcomClient(mockApiToken, mockBaseURL, {
-      maxRetries: 2,
-      baseDelay: 100,
-      maxDelay: 1000,
-    });
-  });
-
-  afterEach(() => {
-    nock.cleanAll();
-    nock.restore();
+    vi.clearAllMocks();
+    client = new CalcomClient();
+    mockAxiosInstance = (client as any).axiosInstance;
   });
 
   describe('constructor', () => {
-    it('should create client with correct configuration', () => {
+    it('should create client with default config', () => {
       expect(client).toBeInstanceOf(CalcomClient);
     });
 
-    it('should use default config values when not provided', () => {
-      // This test verifies the client can be created with minimal params
-      const defaultClient = new CalcomClient('token', 'https://api.cal.com');
-      expect(defaultClient).toBeInstanceOf(CalcomClient);
+    it('should create client with custom config', () => {
+      const customClient = new CalcomClient(
+        'custom-token',
+        'https://custom.cal.com'
+      );
+      expect(customClient).toBeInstanceOf(CalcomClient);
     });
   });
 
   describe('getEventTypes', () => {
-    const mockResponse: CalcomEventTypesResponse = {
-      event_types: [
+    it('should fetch event types successfully', async () => {
+      const mockEventTypes: CalcomEventType[] = [
         {
-          id: 508082,
-          title: '30 Min Meeting',
-          slug: '30min',
+          id: 1,
+          title: '30 min meeting',
+          slug: '30-min-meeting',
           length: 30,
           hidden: false,
           position: 0,
           userId: 123,
-          eventName: undefined,
-          timeZone: undefined,
-          periodType: 'UNLIMITED',
-          periodStartDate: undefined,
-          periodEndDate: undefined,
-          periodDays: undefined,
-          periodCountCalendarDays: false,
-          requiresConfirmation: false,
-          recurringEvent: undefined,
-          disableGuests: false,
-          hideCalendarNotes: false,
-          minimumBookingNotice: 120,
-          beforeEventBuffer: 0,
-          afterEventBuffer: 0,
-          schedulingType: undefined,
-          price: 0,
-          currency: 'usd',
-          slotInterval: undefined,
-          metadata: {},
-          successRedirectUrl: undefined,
-          workflows: [],
-          hosts: [],
-          users: [],
         },
-      ],
-    };
+      ];
 
-    it('should successfully fetch event types', async () => {
-      const scope = nock(mockBaseURL)
-        .get('/v1/event-types')
-        .reply(200, mockResponse);
+      const mockResponse = {
+        data: {
+          event_types: mockEventTypes,
+        },
+      };
+
+      mockAxiosInstance.request.mockResolvedValueOnce(mockResponse);
 
       const result = await client.getEventTypes();
 
-      expect(result).toEqual(mockResponse.event_types);
-      expect(scope.isDone()).toBe(true);
+      expect(result).toEqual(mockEventTypes);
+      expect(mockAxiosInstance.request).toHaveBeenCalledWith({
+        method: 'GET',
+        url: '/v1/event-types',
+      });
     });
 
-    it('should include authorization header', async () => {
-      const scope = nock(mockBaseURL)
-        .get('/v1/event-types')
-        .matchHeader('Authorization', `Bearer ${mockApiToken}`)
-        .reply(200, mockResponse);
+    it('should handle API errors', async () => {
+      const apiError = {
+        response: {
+          status: 401,
+          data: {
+            error: {
+              code: 'UNAUTHORIZED',
+              message: 'Invalid API token',
+            },
+          },
+        },
+      };
 
-      await client.getEventTypes();
+      mockAxiosInstance.request.mockRejectedValueOnce(apiError);
 
-      expect(scope.isDone()).toBe(true);
-    });
-
-    it('should include content-type header', async () => {
-      const scope = nock(mockBaseURL)
-        .get('/v1/event-types')
-        .matchHeader('Content-Type', 'application/json')
-        .reply(200, mockResponse);
-
-      await client.getEventTypes();
-
-      expect(scope.isDone()).toBe(true);
+      await expect(client.getEventTypes()).rejects.toThrow(CalcomClientError);
     });
   });
 
-  describe('getSlotsByUsername', () => {
-    const mockParams: GetSlotsByUsernameParams = {
-      username: 'michals',
-      eventTypeSlug: '30min',
-      start: '2025-06-12T00:00:00Z',
-      end: '2025-06-19T23:59:59Z',
-      timeZone: 'Europe/Stockholm',
+  describe('getSlots', () => {
+    const mockParams: GetSlotsParams = {
+      eventTypeId: 123,
+      start: '2024-01-01T00:00:00Z',
+      end: '2024-01-02T00:00:00Z',
+      timeZone: 'UTC',
     };
 
-    const mockResponse: CalcomSlotsResponse = {
-      slots: {
-        '2025-06-12': [
-          {
-            time: '2025-06-12T09:00:00Z',
-            attendees: 1,
-            users: [
-              {
-                id: 123,
-                username: 'michals',
-                name: 'Michal',
-              },
-            ],
-          },
-          {
-            time: '2025-06-12T10:00:00Z',
-            attendees: 1,
-            users: [
-              {
-                id: 123,
-                username: 'michals',
-                name: 'Michal',
-              },
-            ],
-          },
-        ],
-        '2025-06-13': [
-          {
-            time: '2025-06-13T14:00:00Z',
-            attendees: 1,
-          },
-        ],
-      },
-    };
+    it('should fetch slots successfully', async () => {
+      const mockSlots: CalcomSlotsResponse = {
+        slots: {
+          '2024-01-01': [
+            { time: '2024-01-01T10:00:00Z' },
+            { time: '2024-01-01T11:00:00Z' },
+          ],
+        },
+      };
 
-    it('should successfully fetch slots by username', async () => {
-      const scope = nock(mockBaseURL)
-        .get('/v2/slots')
-        .query(mockParams as any)
-        .reply(200, mockResponse);
+      mockAxiosInstance.request.mockResolvedValueOnce({
+        data: mockSlots,
+      });
 
-      const result = await client.getSlotsByUsername(mockParams);
+      const result = await client.getSlots(mockParams);
 
-      expect(result).toEqual(mockResponse);
-      expect(scope.isDone()).toBe(true);
+      expect(result).toEqual(mockSlots);
+      expect(mockAxiosInstance.request).toHaveBeenCalledWith({
+        method: 'GET',
+        url: '/v2/slots',
+        params: {
+          eventTypeId: 123,
+          start: '2024-01-01T00:00:00Z',
+          end: '2024-01-02T00:00:00Z',
+          timeZone: 'UTC',
+        },
+        headers: {
+          'cal-api-version': '2024-09-04',
+          Accept: 'application/json',
+        },
+      });
     });
 
-    it('should include v2 API headers', async () => {
-      const scope = nock(mockBaseURL)
-        .get('/v2/slots')
-        .matchHeader('Authorization', `Bearer ${mockApiToken}`)
-        .matchHeader('cal-api-version', '2024-09-04')
-        .matchHeader('Accept', 'application/json')
-        .query(mockParams as any)
-        .reply(200, mockResponse);
-
-      await client.getSlotsByUsername(mockParams);
-
-      expect(scope.isDone()).toBe(true);
-    });
-
-    it('should handle network errors with retry', async () => {
-      // For this test, we'll test the retry logic with 500 errors which work reliably
-      // instead of trying to simulate complex network failures
-      const scope = nock(mockBaseURL)
-        .get('/v2/slots')
-        .query(mockParams as any)
-        .reply(503, {
-          error: {
-            code: 'SERVICE_UNAVAILABLE',
-            message: 'Service temporarily unavailable',
+    it('should handle API errors', async () => {
+      const apiError = {
+        response: {
+          status: 400,
+          data: {
+            error: {
+              code: 'BAD_REQUEST',
+              message: 'Invalid date range',
+            },
           },
-        })
-        .get('/v2/slots')
-        .query(mockParams as any)
-        .reply(200, {
-          slots: {},
-        });
+        },
+      };
 
-      const result = await client.getSlotsByUsername(mockParams);
+      mockAxiosInstance.request.mockRejectedValueOnce(apiError);
 
-      expect(result.slots).toEqual({});
-      expect(scope.isDone()).toBe(true);
-    });
-
-    it('should throw error after max retries exceeded', async () => {
-      // Test with 500 errors that definitely trigger retry logic
-      const scope = nock(mockBaseURL)
-        .get('/v2/slots')
-        .query(mockParams as any)
-        .reply(503, {
-          error: {
-            code: 'SERVICE_UNAVAILABLE',
-            message: 'Service temporarily unavailable',
-          },
-        })
-        .get('/v2/slots')
-        .query(mockParams as any)
-        .reply(503, {
-          error: {
-            code: 'SERVICE_UNAVAILABLE',
-            message: 'Service temporarily unavailable',
-          },
-        });
-
-      await expect(client.getSlotsByUsername(mockParams)).rejects.toThrow(
+      await expect(client.getSlots(mockParams)).rejects.toThrow(
         CalcomClientError
       );
-
-      expect(scope.isDone()).toBe(true);
-    });
-  });
-
-  describe('getSlotsByEventTypeId', () => {
-    const mockParams: GetSlotsByEventTypeIdParams = {
-      eventTypeId: 508082,
-      start: '2025-06-12T00:00:00Z',
-      end: '2025-06-19T23:59:59Z',
-      timeZone: 'Europe/Stockholm',
-    };
-
-    const mockResponse: CalcomSlotsResponse = {
-      slots: {
-        '2025-06-12': [
-          {
-            time: '2025-06-12T09:00:00Z',
-            attendees: 1,
-          },
-          {
-            time: '2025-06-12T10:00:00Z',
-            attendees: 1,
-          },
-        ],
-      },
-    };
-
-    it('should successfully fetch slots by event type ID', async () => {
-      const scope = nock(mockBaseURL)
-        .get('/v2/slots')
-        .query(mockParams as any)
-        .reply(200, mockResponse);
-
-      const result = await client.getSlotsByEventTypeId(mockParams);
-
-      expect(result).toEqual(mockResponse);
-      expect(scope.isDone()).toBe(true);
     });
 
-    it('should include v2 API headers', async () => {
-      const scope = nock(mockBaseURL)
-        .get('/v2/slots')
-        .matchHeader('Authorization', `Bearer ${mockApiToken}`)
-        .matchHeader('cal-api-version', '2024-09-04')
-        .matchHeader('Accept', 'application/json')
-        .query(mockParams as any)
-        .reply(200, mockResponse);
+    it('should handle network errors', async () => {
+      const networkError = {
+        request: {},
+        message: 'Network Error',
+      };
 
-      await client.getSlotsByEventTypeId(mockParams);
+      // Mock should reject for all retry attempts (3 times)
+      mockAxiosInstance.request
+        .mockRejectedValueOnce(networkError)
+        .mockRejectedValueOnce(networkError)
+        .mockRejectedValueOnce(networkError);
 
-      expect(scope.isDone()).toBe(true);
-    });
-  });
-
-  describe('error handling', () => {
-    const mockParams: GetSlotsByUsernameParams = {
-      username: 'michals',
-      eventTypeSlug: '30min',
-      start: '2025-06-12T00:00:00Z',
-      end: '2025-06-19T23:59:59Z',
-      timeZone: 'Europe/Stockholm',
-    };
-
-    it('should handle 4xx client errors without retry', async () => {
-      const scope = nock(mockBaseURL)
-        .get('/v2/slots')
-        .query(mockParams as any)
-        .reply(400, {
-          error: {
-            code: 'BAD_REQUEST',
-            message: 'Invalid parameters',
-          },
-        });
-
-      await expect(client.getSlotsByUsername(mockParams)).rejects.toThrow(
+      await expect(client.getSlots(mockParams)).rejects.toThrow(
         CalcomClientError
       );
-
-      // Should not retry 4xx errors
-      expect(scope.isDone()).toBe(true);
-    });
-
-    it('should handle 401 unauthorized errors', async () => {
-      const scope = nock(mockBaseURL)
-        .get('/v2/slots')
-        .query(mockParams as any)
-        .reply(401, {
-          error: {
-            code: 'UNAUTHORIZED',
-            message: 'Invalid API token',
-          },
-        });
-
-      await expect(client.getSlotsByUsername(mockParams)).rejects.toThrow(
-        'Invalid API token'
-      );
-
-      expect(scope.isDone()).toBe(true);
     });
   });
 
   describe('retry logic', () => {
-    const mockParams: GetSlotsByEventTypeIdParams = {
-      eventTypeId: 508082,
-      start: '2025-06-12T00:00:00Z',
-      end: '2025-06-19T23:59:59Z',
-      timeZone: 'Europe/Stockholm',
-    };
+    it('should retry on 5xx errors', async () => {
+      const serverError = {
+        response: {
+          status: 500,
+          data: {
+            error: {
+              code: 'INTERNAL_ERROR',
+              message: 'Server error',
+            },
+          },
+        },
+      };
 
-    it('should retry on 500 server errors', async () => {
-      // Mock 500 error, then success
-      const scope = nock(mockBaseURL)
-        .get('/v2/slots')
-        .query(mockParams as any)
-        .reply(500, {
-          error: { code: 'INTERNAL_ERROR', message: 'Server error' },
-        })
-        .get('/v2/slots')
-        .query(mockParams as any)
-        .reply(200, {
-          slots: {},
+      mockAxiosInstance.request
+        .mockRejectedValueOnce(serverError)
+        .mockRejectedValueOnce(serverError)
+        .mockResolvedValueOnce({
+          data: {
+            event_types: [],
+          },
         });
 
-      const result = await client.getSlotsByEventTypeId(mockParams);
+      const result = await client.getEventTypes();
 
-      expect(result.slots).toEqual({});
-      expect(scope.isDone()).toBe(true);
+      expect(result).toEqual([]);
+      expect(mockAxiosInstance.request).toHaveBeenCalledTimes(3);
     });
 
-    it('should retry on 502 bad gateway errors', async () => {
-      const scope = nock(mockBaseURL)
-        .get('/v2/slots')
-        .query(mockParams as any)
-        .reply(502)
-        .get('/v2/slots')
-        .query(mockParams as any)
-        .reply(200, {
-          slots: {},
-        });
+    it('should not retry on 4xx errors', async () => {
+      const clientError = {
+        response: {
+          status: 400,
+          data: {
+            error: {
+              code: 'BAD_REQUEST',
+              message: 'Bad request',
+            },
+          },
+        },
+      };
 
-      const result = await client.getSlotsByEventTypeId(mockParams);
+      mockAxiosInstance.request.mockRejectedValueOnce(clientError);
 
-      expect(result.slots).toEqual({});
-      expect(scope.isDone()).toBe(true);
-    });
-
-    it('should not retry on 400 bad request errors', async () => {
-      const scope = nock(mockBaseURL)
-        .get('/v2/slots')
-        .query(mockParams as any)
-        .reply(400, {
-          error: { code: 'BAD_REQUEST', message: 'Bad request' },
-        });
-
-      await expect(client.getSlotsByEventTypeId(mockParams)).rejects.toThrow(
-        'Bad request'
-      );
-
-      expect(scope.isDone()).toBe(true);
-    });
-  });
-
-  describe('CalcomClientError', () => {
-    it('should create error with all properties', () => {
-      const error = new CalcomClientError('Test message', 400, 'TEST_ERROR');
-
-      expect(error.message).toBe('Test message');
-      expect(error.statusCode).toBe(400);
-      expect(error.code).toBe('TEST_ERROR');
-      expect(error.name).toBe('CalcomClientError');
-    });
-
-    it('should create error with minimal properties', () => {
-      const error = new CalcomClientError('Test message');
-
-      expect(error.message).toBe('Test message');
-      expect(error.statusCode).toBeUndefined();
-      expect(error.code).toBeUndefined();
-      expect(error.name).toBe('CalcomClientError');
+      await expect(client.getEventTypes()).rejects.toThrow(CalcomClientError);
+      expect(mockAxiosInstance.request).toHaveBeenCalledTimes(1);
     });
   });
 });

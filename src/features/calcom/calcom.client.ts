@@ -79,20 +79,9 @@ export interface CalcomSlotsResponse {
 }
 
 /**
- * Parameters for getting slots by username/slug
- */
-export interface GetSlotsByUsernameParams {
-  username: string;
-  eventTypeSlug: string;
-  start: string; // ISO 8601 date string
-  end: string; // ISO 8601 date string
-  timeZone: string;
-}
-
-/**
  * Parameters for getting slots by event type ID
  */
-export interface GetSlotsByEventTypeIdParams {
+export interface GetSlotsParams {
   eventTypeId: number;
   start: string; // ISO 8601 date string
   end: string; // ISO 8601 date string
@@ -120,17 +109,6 @@ export class CalcomClientError extends Error {
     super(message);
     this.name = 'CalcomClientError';
   }
-}
-
-/**
- * Formatted event type for user selection
- */
-export interface EventTypeOption {
-  id: number;
-  title: string;
-  description: string;
-  duration: string;
-  requiresConfirmation?: boolean;
 }
 
 /**
@@ -178,36 +156,9 @@ export class CalcomClient {
   }
 
   /**
-   * Get available slots by username and event type slug
-   */
-  async getSlotsByUsername(
-    params: GetSlotsByUsernameParams
-  ): Promise<CalcomSlotsResponse> {
-    const response = await this.makeRequest<CalcomSlotsResponse>({
-      method: 'GET',
-      url: '/v2/slots',
-      params: {
-        username: params.username,
-        eventTypeSlug: params.eventTypeSlug,
-        start: params.start,
-        end: params.end,
-        timeZone: params.timeZone,
-      },
-      headers: {
-        'cal-api-version': '2024-09-04',
-        Accept: 'application/json',
-      },
-    });
-
-    return response.data;
-  }
-
-  /**
    * Get available slots by event type ID
    */
-  async getSlotsByEventTypeId(
-    params: GetSlotsByEventTypeIdParams
-  ): Promise<CalcomSlotsResponse> {
+  async getSlots(params: GetSlotsParams): Promise<CalcomSlotsResponse> {
     const response = await this.makeRequest<CalcomSlotsResponse>({
       method: 'GET',
       url: '/v2/slots',
@@ -299,103 +250,6 @@ export class CalcomClient {
     } else {
       // Request setup error
       return new CalcomClientError(`Request error: ${error.message}`);
-    }
-  }
-
-  /**
-   * Get event types formatted for user selection in conversational flow
-   */
-  async getEventTypeOptions(): Promise<EventTypeOption[]> {
-    const eventTypes = await this.getEventTypes();
-
-    return eventTypes
-      .filter(eventType => !eventType.hidden) // Only show non-hidden events
-      .map(eventType => ({
-        id: eventType.id,
-        title: eventType.title,
-        description: this.formatEventTypeDescription(eventType),
-        duration: this.formatDuration(eventType.length),
-        requiresConfirmation: eventType.requiresConfirmation,
-      }))
-      .sort((a, b) => a.title.localeCompare(b.title)); // Sort alphabetically
-  }
-
-  /**
-   * Get available slots for a specific event type ID (for the final step in conversational flow)
-   */
-  async getSlotsForEventType(
-    eventTypeId: number,
-    start: string,
-    end: string,
-    timeZone: string
-  ): Promise<{
-    eventType: CalcomEventType;
-    slots: CalcomSlotsResponse;
-  }> {
-    // First get the event type details
-    const allEventTypes = await this.getEventTypes();
-    const eventType = allEventTypes.find(et => et.id === eventTypeId);
-
-    if (!eventType) {
-      throw new CalcomClientError(
-        `Event type with ID ${eventTypeId} not found`
-      );
-    }
-
-    // Get the slots
-    const slots = await this.getSlotsByEventTypeId({
-      eventTypeId,
-      start,
-      end,
-      timeZone,
-    });
-
-    return {
-      eventType,
-      slots,
-    };
-  }
-
-  /**
-   * Helper method to format event type description for user selection
-   */
-  private formatEventTypeDescription(eventType: CalcomEventType): string {
-    const parts: string[] = [];
-
-    // Add duration
-    parts.push(`${this.formatDuration(eventType.length)} meeting`);
-
-    // Add confirmation requirement
-    if (eventType.requiresConfirmation) {
-      parts.push('requires confirmation');
-    }
-
-    // Add team info if applicable
-    if (eventType.teamId) {
-      parts.push('team meeting');
-    }
-
-    // Add price if applicable
-    if (eventType.price && eventType.price > 0) {
-      parts.push(`${eventType.currency || '$'}${eventType.price}`);
-    }
-
-    return parts.join(' • ');
-  }
-
-  /**
-   * Helper method to format duration in a user-friendly way
-   */
-  private formatDuration(minutes: number): string {
-    if (minutes < 60) {
-      return `${minutes} min`;
-    } else if (minutes % 60 === 0) {
-      const hours = minutes / 60;
-      return `${hours} hour${hours > 1 ? 's' : ''}`;
-    } else {
-      const hours = Math.floor(minutes / 60);
-      const remainingMinutes = minutes % 60;
-      return `${hours}h ${remainingMinutes}m`;
     }
   }
 }

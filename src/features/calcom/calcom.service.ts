@@ -1,14 +1,12 @@
-import { CalcomClient, EventTypeOption } from './calcom.client.js';
+import { CalcomClient } from './calcom.client.js';
 import {
   GetSlotsInput,
   GetSlotsInputSchema,
   CalcomSlotsResponse,
-  GetEventTypeSlotsInput,
-  GetEventTypeSlotsInputSchema,
 } from './calcom.types.js';
 
 /**
- * Cal.com service for handling slot requests and conversational flow
+ * Cal.com service for handling slot requests
  */
 export class CalcomService {
   private calcomClient: CalcomClient | null = null;
@@ -24,35 +22,15 @@ export class CalcomService {
   }
 
   /**
-   * Get available event types for user selection (Step 1 of conversational flow)
+   * Get event types for the authenticated user
    */
-  async getEventTypeOptions(): Promise<EventTypeOption[]> {
+  async getEventTypes() {
     const client = this.getCalcomClient();
-    return await client.getEventTypeOptions();
+    return await client.getEventTypes();
   }
 
   /**
-   * Get available slots for a specific event type ID (Step 2 of conversational flow)
-   */
-  async getSlotsForEventType(input: GetEventTypeSlotsInput): Promise<{
-    eventType: any;
-    slots: CalcomSlotsResponse;
-  }> {
-    const validatedInput = GetEventTypeSlotsInputSchema.parse(input);
-    const timeZone = validatedInput.timeZone || 'UTC';
-
-    const client = this.getCalcomClient();
-
-    return await client.getSlotsForEventType(
-      validatedInput.eventTypeId,
-      validatedInput.start,
-      validatedInput.end,
-      timeZone
-    );
-  }
-
-  /**
-   * Get available slots from Cal.com (legacy method - maintains backward compatibility)
+   * Get available slots from Cal.com
    */
   async getAvailableSlots(input: GetSlotsInput): Promise<CalcomSlotsResponse> {
     // Validate input and apply defaults
@@ -63,29 +41,12 @@ export class CalcomService {
 
     const client = this.getCalcomClient();
 
-    // Determine which Cal.com API method to use
-    if (validatedInput.username && validatedInput.eventTypeSlug) {
-      // Use username/slug approach
-      return await client.getSlotsByUsername({
-        username: validatedInput.username,
-        eventTypeSlug: validatedInput.eventTypeSlug,
-        start: validatedInput.start,
-        end: validatedInput.end,
-        timeZone,
-      });
-    } else if (validatedInput.eventTypeId) {
-      // Use event type ID approach
-      return await client.getSlotsByEventTypeId({
-        eventTypeId: validatedInput.eventTypeId,
-        start: validatedInput.start,
-        end: validatedInput.end,
-        timeZone,
-      });
-    } else {
-      throw new Error(
-        'Either username/eventTypeSlug or eventTypeId must be provided'
-      );
-    }
+    return await client.getSlots({
+      eventTypeId: validatedInput.eventTypeId,
+      start: validatedInput.start,
+      end: validatedInput.end,
+      timeZone,
+    });
   }
 }
 

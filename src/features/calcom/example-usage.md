@@ -1,131 +1,148 @@
-# Cal.com Conversational Flow Example
+# Cal.com Feature Usage Examples
 
-This example demonstrates how the enhanced Cal.com client works with the new conversational flow.
+## Multi-Step Meeting Booking Workflow
 
-## Scenario: LLM helping a user schedule a meeting
+This Cal.com integration now provides a guided multi-step process for booking meetings using MCP prompts and resources.
 
-### Step 1: User asks for meeting availability
-**User:** "What meeting slots are available this week?"
+### New Capabilities Added
 
-### Step 2: LLM gets available meeting types
-```javascript
-// LLM calls the GET_EVENT_TYPE_OPTIONS MCP tool
-const response = await mcp.callTool('GET_EVENT_TYPE_OPTIONS', {});
+1. **Prompts** - Guided conversation templates
+2. **Resources** - Workflow documentation for the LLM
+3. **Enhanced Tools** - Same GET_EVENT_TYPES and GET_AVAILABLE_SLOTS
 
-// Response:
+### How the Multi-Step Flow Works
+
+#### Step 1: User Requests Meeting
+**User:** "I'd like to book a meeting"
+
+**LLM Should:** Invoke the `MEETING_BOOKING_FLOW` prompt
+```json
 {
-  "eventTypes": [
-    {
-      "id": 123,
-      "title": "Quick Chat",
-      "description": "15 min meeting",
-      "duration": "15 min"
-    },
-    {
-      "id": 124,
-      "title": "Strategy Session",
-      "description": "1 hour meeting • requires confirmation",
-      "duration": "1 hour",
-      "requiresConfirmation": true
-    },
-    {
-      "id": 125,
-      "title": "Consultation Call",
-      "description": "30 min meeting • team meeting • $50",
-      "duration": "30 min"
-    }
-  ],
-  "message": "Available meeting types. Ask the user which type they prefer."
+  "prompt": "MEETING_BOOKING_FLOW",
+  "arguments": {
+    "startDate": "2024-01-15T09:00:00Z",
+    "endDate": "2024-01-19T17:00:00Z", 
+    "timeZone": "America/New_York"
+  }
 }
 ```
 
-### Step 3: LLM presents options to user
-**LLM:** "I found several meeting types available:
+**Result:** The prompt automatically:
+- Fetches available event types
+- Presents them in a user-friendly format
+- Asks the user to select their preferred meeting type
 
-1. **Quick Chat** - 15 min meeting
-2. **Strategy Session** - 1 hour meeting • requires confirmation  
-3. **Consultation Call** - 30 min meeting • team meeting • $50
+#### Step 2: User Selects Meeting Type
+**User:** "I want the 30-minute consultation" or "I'll take option 2"
 
-Which type of meeting would you like to schedule?"
-
-### Step 4: User selects meeting type
-**User:** "I'd like the Strategy Session"
-
-### Step 5: LLM gets slots for selected meeting type
-```javascript
-// LLM calls the GET_SLOTS_FOR_EVENT_TYPE MCP tool
-const response = await mcp.callTool('GET_SLOTS_FOR_EVENT_TYPE', {
-  eventTypeId: 124, // Strategy Session ID from step 2
-  start: "2024-01-01T00:00:00Z",
-  end: "2024-01-07T23:59:59Z",
-  timeZone: "America/New_York"
-});
-
-// Response:
+**LLM Should:** Parse the selection to identify the event type ID, then use `GET_AVAILABLE_SLOTS`
+```json
 {
-  "eventType": {
-    "id": 124,
-    "title": "Strategy Session",
-    "length": 60,
-    "slug": "strategy-session",
-    "requiresConfirmation": true
-  },
-  "slots": {
-    "slots": {
-      "2024-01-01": [
-        { "time": "09:00:00" },
-        { "time": "14:00:00" }
-      ],
-      "2024-01-03": [
-        { "time": "10:00:00" },
-        { "time": "15:00:00" }
-      ]
-    }
-  },
-  "message": "Available slots for \"Strategy Session\" (60 minutes)"
+  "tool": "GET_AVAILABLE_SLOTS",
+  "arguments": {
+    "eventTypeId": 123,
+    "start": "2024-01-15T09:00:00Z",
+    "end": "2024-01-19T17:00:00Z",
+    "timeZone": "America/New_York"
+  }
 }
 ```
 
-### Step 6: LLM presents available time slots
-**LLM:** "Here are the available Strategy Session slots (1 hour) for this week:
+#### Step 3: Present Available Slots
+**LLM Should:** Show the available time slots in a user-friendly format
 
-**Monday, January 1st:**
-- 9:00 AM EST
-- 2:00 PM EST
+### If User Selection is Unclear
 
-**Wednesday, January 3rd:**
-- 10:00 AM EST
-- 3:00 PM EST
+Use the `EVENT_TYPE_SELECTION` prompt to clarify:
+```json
+{
+  "prompt": "EVENT_TYPE_SELECTION",
+  "arguments": {
+    "userInput": "I want something quick"
+  }
+}
+```
 
-Please note: This meeting requires confirmation before it's finalized.
+### MCP Resource Available
 
-Which time works best for you?"
+The LLM can access workflow documentation at:
+- **Resource URI:** `calcom://booking-workflow`
+- **Purpose:** Provides detailed guidance on the multi-step booking process
 
-## Benefits of this approach:
+## Traditional Direct Tool Usage (Still Available)
 
-1. **Natural conversation flow** - No need for user to know Cal.com specifics
-2. **Discovery-based** - LLM learns about available meeting types dynamically
-3. **Rich context** - Both event type details and slots are returned together
-4. **Error handling** - Clear validation and helpful error messages
-5. **Flexible** - Works with any Cal.com setup without prior configuration
+### Get Event Types
+```bash
+# Via MCP tool
+GET_EVENT_TYPES
+```
 
-## Direct service usage (for developers):
+### Get Available Slots  
+```bash
+# Via MCP tool  
+GET_AVAILABLE_SLOTS
+{
+  "eventTypeId": 123,
+  "start": "2024-01-15T09:00:00Z", 
+  "end": "2024-01-19T17:00:00Z",
+  "timeZone": "America/New_York"
+}
+```
+
+## Key Benefits of the New Approach
+
+1. **Guided Experience:** Prompts create a natural conversation flow
+2. **Context Awareness:** Resources provide the LLM with workflow knowledge
+3. **Error Prevention:** Built-in validation and clear error messages
+4. **Flexibility:** Supports various user input styles and preferences
+5. **Fallback Options:** Traditional tool usage still available
+
+## Implementation Notes
+
+- Event type IDs are extracted from the GET_EVENT_TYPES response
+- User selections are parsed flexibly (numbers, titles, partial matches)
+- The workflow handles missing or invalid inputs gracefully
+- Timezone handling is built into the flow
+
+This creates a much more natural and user-friendly meeting booking experience compared to requiring users to know event type IDs upfront.
+
+## Direct Service Usage
+
+If you need to use the service directly in your code:
 
 ```typescript
-import { calcomService } from './features/calcom/index.js';
+import { calcomService } from './calcom/index.js';
 
-// Get all available meeting types
-const eventTypes = await calcomService.getEventTypeOptions();
-console.log('Available meeting types:', eventTypes);
+// Get event types
+const eventTypes = await calcomService.getEventTypes();
 
-// Get slots for a specific event type
-const result = await calcomService.getSlotsForEventType({
+// Get slots for specific event type  
+const slots = await calcomService.getAvailableSlots({
   eventTypeId: 123,
   start: '2024-01-01T00:00:00Z',
   end: '2024-01-07T23:59:59Z',
-  timeZone: 'America/New_York'
+  timeZone: 'UTC'
 });
+```
 
-console.log('Event type:', result.eventType);
-console.log('Available slots:', result.slots);
-``` 
+## Error Handling
+
+```typescript
+try {
+  const eventTypes = await GET_EVENT_TYPES();
+  console.log('Event types:', eventTypes);
+} catch (error) {
+  console.error('Failed to get event types:', error);
+}
+
+try {
+  const slots = await GET_AVAILABLE_SLOTS({
+    eventTypeId: 123,
+    start: "2024-01-01T00:00:00Z",
+    end: "2024-01-07T23:59:59Z",
+    timeZone: "UTC"
+  });
+  console.log('Available slots:', slots);
+} catch (error) {
+  console.error('Failed to get slots:', error);
+} 
