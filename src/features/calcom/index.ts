@@ -1,11 +1,14 @@
+// Export the standardized feature
+export { calcomFeature, CalcomFeature } from './calcom.feature.js';
+
+// Export legacy registration function for backward compatibility
 export { registerCalcomFeature } from './calcom.feature.js';
-export { CalcomService, calcomService } from './calcom.service.js';
-export { CalcomClient } from './calcom.client.js';
+
+// Export configuration utilities
 export { canLoadCalcomFeature, loadCalcomConfig } from './calcom.config.js';
-export type { CalcomConfig } from './calcom.config.js';
-export type {
-  GetSlotsInput,
-  CalcomSlot,
-  CalcomSlotsResponse,
-  FormattedSlotData,
-} from './calcom.types.js';
+
+// Export service
+export { calcomService, CalcomService } from './calcom.service.js';
+
+// Export types
+export * from './calcom.types.js';

@@ -5,8 +5,8 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { config } from './infra/config.js';
 
-// Import available features
-import { registerCalcomFeature } from './features/calcom/index.js';
+// Import the feature registry system
+import { featureRegistry, initializeFeatures } from './features/index.js';
 
 /**
  * Server transport mode
@@ -16,7 +16,7 @@ export type ServerMode = 'stdio' | 'http';
 /**
  * Create and configure the MCP server with available features
  */
-function createMcpServer(): McpServer {
+async function createMcpServer(): Promise<McpServer> {
   const server = new McpServer({
     name: 'backtick-mcp-server',
     version: '1.0.0',
@@ -25,19 +25,30 @@ function createMcpServer(): McpServer {
     },
   });
 
-  // Register available features
-  const featuresLoaded: string[] = [];
+  // Initialize and register all features
+  initializeFeatures();
+  await featureRegistry.registerAllFeatures(server);
 
-  if (registerCalcomFeature(server)) {
-    featuresLoaded.push('Cal.com');
-  }
+  // Log summary
+  const successfulFeatures =
+    featureRegistry.getSuccessfullyRegisteredFeatures();
+  const failedFeatures = featureRegistry.getFailedFeatureRegistrations();
 
-  if (featuresLoaded.length === 0) {
+  if (successfulFeatures.length === 0) {
     console.error(
-      'Warning: No features loaded. Server will have no capabilities.'
+      '⚠️  Warning: No features loaded successfully. Server will have no capabilities.'
     );
   } else {
-    console.error(`Features loaded: ${featuresLoaded.join(', ')}`);
+    const featureNames = successfulFeatures
+      .map(result => result.info?.name)
+      .join(', ');
+    console.error(
+      `🎯 ${successfulFeatures.length} feature(s) loaded: ${featureNames}`
+    );
+  }
+
+  if (failedFeatures.length > 0) {
+    console.error(`⚠️  ${failedFeatures.length} feature(s) failed to load`);
   }
 
   return server;
@@ -47,7 +58,7 @@ function createMcpServer(): McpServer {
  * Start MCP server with STDIO transport
  */
 async function startStdioServer(): Promise<void> {
-  const server = createMcpServer();
+  const server = await createMcpServer();
   const transport = new StdioServerTransport();
 
   await server.connect(transport);
@@ -81,7 +92,7 @@ async function startHttpServer(port: number = config.PORT): Promise<void> {
   // MCP endpoint for JSON-RPC over HTTP
   app.post('/mcp', async (req, res) => {
     try {
-      const server = createMcpServer();
+      const server = await createMcpServer();
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(), // Generate secure session IDs
       });
@@ -111,7 +122,7 @@ async function startHttpServer(port: number = config.PORT): Promise<void> {
   // Handle GET requests for SSE streams
   app.get('/mcp', async (req, res) => {
     try {
-      const server = createMcpServer();
+      const server = await createMcpServer();
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
       });
@@ -141,7 +152,7 @@ async function startHttpServer(port: number = config.PORT): Promise<void> {
   // Handle DELETE requests for session termination
   app.delete('/mcp', async (req, res) => {
     try {
-      const server = createMcpServer();
+      const server = await createMcpServer();
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
       });
