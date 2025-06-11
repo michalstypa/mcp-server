@@ -22,6 +22,11 @@ async function createMcpServer(): Promise<McpServer> {
     version: '1.0.0',
     capabilities: {
       tools: {},
+      resources: {
+        subscribe: true,
+        listChanged: true,
+      },
+      prompts: {},
     },
   });
 

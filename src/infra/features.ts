@@ -17,6 +17,9 @@ export interface FeatureRegistrationResult {
   success: boolean;
   error?: string;
   toolsRegistered?: string[];
+  resourcesRegistered?: string[];
+  promptsRegistered?: string[];
+  notificationsRegistered?: string[];
   info?: FeatureInfo;
 }
 
@@ -108,11 +111,29 @@ export class FeatureRegistry {
         this.registeredFeatures.set(info.name, result);
 
         if (result.success) {
+          const capabilities: string[] = [];
+          if (result.toolsRegistered?.length) {
+            capabilities.push(`Tools: ${result.toolsRegistered.join(', ')}`);
+          }
+          if (result.resourcesRegistered?.length) {
+            capabilities.push(
+              `Resources: ${result.resourcesRegistered.join(', ')}`
+            );
+          }
+          if (result.promptsRegistered?.length) {
+            capabilities.push(
+              `Prompts: ${result.promptsRegistered.join(', ')}`
+            );
+          }
+          if (result.notificationsRegistered?.length) {
+            capabilities.push(
+              `Notifications: ${result.notificationsRegistered.join(', ')}`
+            );
+          }
+
           console.error(
             `✅ Feature ${info.name} (v${info.version}) loaded successfully` +
-              (result.toolsRegistered?.length
-                ? ` - Tools: ${result.toolsRegistered.join(', ')}`
-                : '')
+              (capabilities.length ? ` - ${capabilities.join(' | ')}` : '')
           );
         } else {
           console.error(
