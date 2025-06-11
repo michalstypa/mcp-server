@@ -76,6 +76,9 @@ describe('CalcomClient', () => {
       expect(mockAxiosInstance.request).toHaveBeenCalledWith({
         method: 'GET',
         url: '/v1/event-types',
+        params: {
+          apiKey: 'test-token',
+        },
       });
     });
 
@@ -135,6 +138,7 @@ describe('CalcomClient', () => {
         headers: {
           'cal-api-version': '2024-09-04',
           Accept: 'application/json',
+          Authorization: 'Bearer test-token',
         },
       });
     });

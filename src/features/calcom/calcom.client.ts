@@ -117,6 +117,7 @@ export class CalcomClientError extends Error {
 export class CalcomClient {
   private readonly axiosInstance: AxiosInstance;
   private readonly retryConfig: RetryConfig;
+  private readonly apiToken: string;
 
   constructor(
     apiToken?: string,
@@ -133,10 +134,11 @@ export class CalcomClient {
       ...retryConfig,
     };
 
+    this.apiToken = apiToken || config.CALCOM_API_TOKEN;
+
     this.axiosInstance = axios.create({
       baseURL: baseURL || config.CALCOM_API_BASE,
       headers: {
-        Authorization: `Bearer ${apiToken || config.CALCOM_API_TOKEN}`,
         'Content-Type': 'application/json',
       },
       timeout: 30000, // 30 second timeout
@@ -150,6 +152,9 @@ export class CalcomClient {
     const response = await this.makeRequest<CalcomEventTypesResponse>({
       method: 'GET',
       url: '/v1/event-types',
+      params: {
+        apiKey: this.apiToken,
+      },
     });
 
     return response.data.event_types;
@@ -171,6 +176,7 @@ export class CalcomClient {
       headers: {
         'cal-api-version': '2024-09-04',
         Accept: 'application/json',
+        Authorization: `Bearer ${this.apiToken}`,
       },
     });
 

@@ -74,6 +74,7 @@ export class CalcomFeature implements Feature {
           } catch (error) {
             const errorMessage =
               error instanceof Error ? error.message : 'Unknown error';
+
             return {
               content: [
                 {
