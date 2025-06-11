@@ -7,11 +7,14 @@ import type {
   FeatureInfo,
   FeatureRegistrationResult,
 } from '../../infra/features.js';
+import { createFeatureLogger } from '../../infra/logger.js';
 
 /**
  * Cal.com feature implementation
  */
 export class CalcomFeature implements Feature {
+  private logger = createFeatureLogger('calcom');
+
   /**
    * Get feature information
    */
@@ -35,7 +38,7 @@ export class CalcomFeature implements Feature {
   /**
    * Register the feature with the MCP server
    */
-  register(server: McpServer): FeatureRegistrationResult {
+  async register(server: McpServer): Promise<FeatureRegistrationResult> {
     try {
       // Validate configuration (will throw if invalid)
       loadCalcomConfig();
@@ -128,11 +131,17 @@ export class CalcomFeature implements Feature {
         info: this.getInfo(),
       };
     } catch (error) {
-      return {
+      const result: FeatureRegistrationResult = {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Unknown error during Cal.com feature registration',
         info: this.getInfo(),
       };
+
+      this.logger.error(`Cal.com feature failed to load: ${result.error}`);
+      return result;
     }
   }
 }
@@ -146,10 +155,13 @@ export const calcomFeature = new CalcomFeature();
  * Legacy registration function for backward compatibility
  * @deprecated Use the standardized CalcomFeature class instead
  */
-export function registerCalcomFeature(server: McpServer): boolean {
-  const result = calcomFeature.register(server);
+export async function registerCalcomFeature(
+  server: McpServer
+): Promise<boolean> {
+  const result = await calcomFeature.register(server);
   if (!result.success) {
-    console.error(`Cal.com feature failed to load: ${result.error}`);
+    const logger = createFeatureLogger('calcom-legacy');
+    logger.error(`Cal.com feature failed to load: ${result.error}`);
   }
   return result.success;
 }

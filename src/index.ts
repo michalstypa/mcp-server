@@ -2,12 +2,14 @@
 
 import { startServer } from './server.js';
 import { config } from './infra/config.js';
+import { createServerLogger, logError } from './infra/logger.js';
 
 /**
  * Main entry point for the MCP server
  * Supports both STDIO and HTTP transport modes
  */
 async function main() {
+  const serverLogger = createServerLogger();
   const args = process.argv.slice(2);
 
   // Determine transport mode from command line arguments
@@ -21,25 +23,25 @@ async function main() {
     port = parseInt(portArg.split('=')[1], 10);
   }
 
-  console.error(`Starting Backtick MCP Server in ${mode} mode...`);
+  serverLogger.info(`Starting Backtick MCP Server in ${mode} mode...`);
 
   await startServer(mode, port);
 }
 
 // Handle unhandled promise rejections
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+process.on('unhandledRejection', reason => {
+  logError(reason, 'unhandled promise rejection');
   process.exit(1);
 });
 
 // Handle uncaught exceptions
 process.on('uncaughtException', error => {
-  console.error('Uncaught Exception:', error);
+  logError(error, 'uncaught exception');
   process.exit(1);
 });
 
 // Start the server
 main().catch(error => {
-  console.error('Failed to start server:', error);
+  logError(error, 'main function');
   process.exit(1);
 });

@@ -1,4 +1,5 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { createFeatureLogger } from './logger.js';
 
 /**
  * Feature metadata interface
@@ -58,6 +59,7 @@ export interface Feature {
 export class FeatureRegistry {
   private features = new Map<string, Feature>();
   private registeredFeatures = new Map<string, FeatureRegistrationResult>();
+  private logger = createFeatureLogger('registry');
 
   /**
    * Register a feature with the registry
@@ -131,12 +133,12 @@ export class FeatureRegistry {
             );
           }
 
-          console.error(
+          this.logger.info(
             `✅ Feature ${info.name} (v${info.version}) loaded successfully` +
               (capabilities.length ? ` - ${capabilities.join(' | ')}` : '')
           );
         } else {
-          console.error(
+          this.logger.error(
             `❌ Feature ${info.name} failed to load: ${result.error}`
           );
         }
@@ -148,7 +150,7 @@ export class FeatureRegistry {
         };
         results.push(result);
         this.registeredFeatures.set(info.name, result);
-        console.error(
+        this.logger.error(
           `❌ Feature ${info.name} failed to load: ${result.error}`
         );
       }

@@ -4,9 +4,15 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { config } from './infra/config.js';
-
-// Import the feature registry system
-import { featureRegistry, initializeFeatures } from './features/index.js';
+import { featureRegistry } from './infra/features.js';
+import { initializeFeatures } from './features/index.js';
+import {
+  createServerLogger,
+  createRequestLogger,
+  logFeatureResults,
+  logError,
+  logServerStart,
+} from './infra/logger.js';
 
 /**
  * Server transport mode
@@ -34,27 +40,12 @@ async function createMcpServer(): Promise<McpServer> {
   initializeFeatures();
   await featureRegistry.registerAllFeatures(server);
 
-  // Log summary
+  // Log summary using structured logging
   const successfulFeatures =
     featureRegistry.getSuccessfullyRegisteredFeatures();
   const failedFeatures = featureRegistry.getFailedFeatureRegistrations();
 
-  if (successfulFeatures.length === 0) {
-    console.error(
-      '⚠️  Warning: No features loaded successfully. Server will have no capabilities.'
-    );
-  } else {
-    const featureNames = successfulFeatures
-      .map(result => result.info?.name)
-      .join(', ');
-    console.error(
-      `🎯 ${successfulFeatures.length} feature(s) loaded: ${featureNames}`
-    );
-  }
-
-  if (failedFeatures.length > 0) {
-    console.error(`⚠️  ${failedFeatures.length} feature(s) failed to load`);
-  }
+  logFeatureResults(successfulFeatures, failedFeatures);
 
   return server;
 }
@@ -67,7 +58,7 @@ async function startStdioServer(): Promise<void> {
   const transport = new StdioServerTransport();
 
   await server.connect(transport);
-  console.error('Backtick MCP Server started with STDIO transport');
+  logServerStart('stdio');
 }
 
 /**
@@ -75,6 +66,8 @@ async function startStdioServer(): Promise<void> {
  */
 async function startHttpServer(port: number = config.PORT): Promise<void> {
   const app = express();
+  const serverLogger = createServerLogger();
+
   app.use(express.json());
 
   // Add CORS headers
@@ -96,6 +89,9 @@ async function startHttpServer(port: number = config.PORT): Promise<void> {
 
   // MCP endpoint for JSON-RPC over HTTP
   app.post('/mcp', async (req, res) => {
+    const requestId = randomUUID();
+    const requestLogger = createRequestLogger(requestId);
+
     try {
       const server = await createMcpServer();
       const transport = new StreamableHTTPServerTransport({
@@ -110,7 +106,7 @@ async function startHttpServer(port: number = config.PORT): Promise<void> {
         server.close();
       });
     } catch (error) {
-      console.error('Error handling MCP request:', error);
+      logError(error, 'MCP request handling', requestLogger);
       if (!res.headersSent) {
         res.status(500).json({
           jsonrpc: '2.0',
@@ -124,8 +120,11 @@ async function startHttpServer(port: number = config.PORT): Promise<void> {
     }
   });
 
-  // Handle GET requests for SSE streams
+  // MCP SSE endpoint for real-time updates
   app.get('/mcp', async (req, res) => {
+    const requestId = randomUUID();
+    const requestLogger = createRequestLogger(requestId);
+
     try {
       const server = await createMcpServer();
       const transport = new StreamableHTTPServerTransport({
@@ -140,22 +139,20 @@ async function startHttpServer(port: number = config.PORT): Promise<void> {
         server.close();
       });
     } catch (error) {
-      console.error('Error handling MCP SSE request:', error);
+      logError(error, 'MCP SSE request handling', requestLogger);
       if (!res.headersSent) {
         res.status(500).json({
-          jsonrpc: '2.0',
-          error: {
-            code: -32603,
-            message: 'Internal server error',
-          },
-          id: null,
+          error: 'Internal server error',
         });
       }
     }
   });
 
-  // Handle DELETE requests for session termination
+  // MCP DELETE endpoint for session termination
   app.delete('/mcp', async (req, res) => {
+    const requestId = randomUUID();
+    const requestLogger = createRequestLogger(requestId);
+
     try {
       const server = await createMcpServer();
       const transport = new StreamableHTTPServerTransport({
@@ -170,29 +167,20 @@ async function startHttpServer(port: number = config.PORT): Promise<void> {
         server.close();
       });
     } catch (error) {
-      console.error('Error handling MCP DELETE request:', error);
+      logError(error, 'MCP DELETE request handling', requestLogger);
       if (!res.headersSent) {
         res.status(500).json({
-          jsonrpc: '2.0',
-          error: {
-            code: -32603,
-            message: 'Internal server error',
-          },
-          id: null,
+          error: 'Internal server error',
         });
       }
     }
   });
 
-  return new Promise<void>((resolve, reject) => {
-    const server = app.listen(port, () => {
-      console.error(
-        `Backtick MCP Server started with HTTP transport on port ${port}`
-      );
-      resolve();
-    });
-
-    server.on('error', reject);
+  app.listen(port, () => {
+    serverLogger.info(
+      `🌐 HTTP server listening on port ${port} - MCP endpoints available at /mcp`
+    );
+    logServerStart('http', port);
   });
 }
 
@@ -203,6 +191,8 @@ export async function startServer(
   mode: ServerMode = 'stdio',
   port?: number
 ): Promise<void> {
+  const serverLogger = createServerLogger();
+
   try {
     if (mode === 'http') {
       await startHttpServer(port);
@@ -210,7 +200,7 @@ export async function startServer(
       await startStdioServer();
     }
   } catch (error) {
-    console.error('Failed to start server:', error);
+    logError(error, 'server startup', serverLogger);
     process.exit(1);
   }
 }
