@@ -1,11 +1,22 @@
-// Export the standardized feature
-export { calcomFeature, CalcomFeature } from './calcom.feature.js';
+// Export the main feature
+export { calcomFeature } from './calcom.feature.js';
 
-// Export configuration utilities
-export { canLoadCalcomFeature, loadCalcomConfig } from './calcom.config.js';
+// Export the service for direct usage if needed
+export { calcomService } from './calcom.service.js';
 
-// Export service
-export { calcomService, CalcomService } from './calcom.service.js';
+// Export client types and interfaces
+export type {
+  CalcomEventType,
+  CalcomSlotsResponse,
+  EventTypeOption,
+  GetSlotsByUsernameParams,
+  GetSlotsByEventTypeIdParams,
+} from './calcom.client.js';
 
-// Export types
-export * from './calcom.types.js';
+// Export service types
+export type {
+  GetSlotsInput,
+  GetEventTypeSlotsInput,
+  CalcomSlot,
+  FormattedSlotData,
+} from './calcom.types.js';

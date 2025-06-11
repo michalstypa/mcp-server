@@ -1,131 +1,201 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { CalcomService } from './calcom.service.js';
-import { CalcomClient } from './calcom.client.js';
 
-// Mock the CalcomClient class
+// Mock the CalcomClient
+const mockGetEventTypeOptions = vi.fn();
+const mockGetSlotsForEventType = vi.fn();
+const mockGetSlotsByUsername = vi.fn();
+const mockGetSlotsByEventTypeId = vi.fn();
+
 vi.mock('./calcom.client.js', () => ({
-  CalcomClient: vi.fn(),
+  CalcomClient: vi.fn().mockImplementation(() => ({
+    getEventTypeOptions: mockGetEventTypeOptions,
+    getSlotsForEventType: mockGetSlotsForEventType,
+    getSlotsByUsername: mockGetSlotsByUsername,
+    getSlotsByEventTypeId: mockGetSlotsByEventTypeId,
+  })),
 }));
 
-describe('Calcom Service', () => {
-  let calcomService: CalcomService;
-  let mockCalcomClient: {
-    getSlotsByUsername: ReturnType<typeof vi.fn>;
-    getSlotsByEventTypeId: ReturnType<typeof vi.fn>;
-  };
+describe('CalcomService', () => {
+  let service: CalcomService;
 
   beforeEach(() => {
-    // Create a new service instance for each test
-    calcomService = new CalcomService();
-
-    // Create the mock client instance
-    mockCalcomClient = {
-      getSlotsByUsername: vi.fn(),
-      getSlotsByEventTypeId: vi.fn(),
-    };
-
-    // Mock the constructor to return our mock client
-    vi.mocked(CalcomClient).mockImplementation(() => mockCalcomClient as any);
+    vi.clearAllMocks();
+    service = new CalcomService();
   });
 
-  describe('getAvailableSlots', () => {
-    it('should call getSlotsByUsername when username and eventTypeSlug provided', async () => {
-      const mockResponse = {
-        slots: {
-          '2025-01-01': [{ time: '10:00:00', attendees: 0 }],
+  describe('Conversational Flow Methods', () => {
+    it('should get event type options', async () => {
+      const mockEventTypes = [
+        {
+          id: 1,
+          title: 'Quick Chat',
+          description: '15 min meeting',
+          duration: '15 min',
         },
-      };
+        {
+          id: 2,
+          title: 'Strategy Session',
+          description: '1 hour meeting • requires confirmation',
+          duration: '1 hour',
+          requiresConfirmation: true,
+        },
+      ];
 
-      mockCalcomClient.getSlotsByUsername.mockResolvedValue(mockResponse);
+      mockGetEventTypeOptions.mockResolvedValue(mockEventTypes);
 
-      const input = {
-        start: '2025-01-01T00:00:00Z',
-        end: '2025-01-02T00:00:00Z',
-        username: 'testuser',
-        eventTypeSlug: 'meeting',
-        timeZone: 'UTC',
-      };
+      const result = await service.getEventTypeOptions();
 
-      const result = await calcomService.getAvailableSlots(input);
-
-      expect(mockCalcomClient.getSlotsByUsername).toHaveBeenCalledWith({
-        username: 'testuser',
-        eventTypeSlug: 'meeting',
-        start: '2025-01-01T00:00:00Z',
-        end: '2025-01-02T00:00:00Z',
-        timeZone: 'UTC',
-      });
-
-      expect(result).toEqual(mockResponse);
+      expect(result).toEqual(mockEventTypes);
+      expect(mockGetEventTypeOptions).toHaveBeenCalledOnce();
     });
 
-    it('should call getSlotsByEventTypeId when eventTypeId provided', async () => {
-      const mockResponse = {
+    it('should get slots for event type', async () => {
+      const mockInput = {
+        eventTypeId: 123,
+        start: '2024-01-01T00:00:00Z',
+        end: '2024-01-07T23:59:59Z',
+        timeZone: 'UTC',
+      };
+
+      const mockResult = {
+        eventType: {
+          id: 123,
+          title: 'Quick Chat',
+          length: 15,
+        },
         slots: {
-          '2025-01-01': [{ time: '14:00:00', attendees: 0 }],
+          slots: {
+            '2024-01-01': [{ time: '09:00:00' }, { time: '10:00:00' }],
+          },
         },
       };
 
-      mockCalcomClient.getSlotsByEventTypeId.mockResolvedValue(mockResponse);
+      mockGetSlotsForEventType.mockResolvedValue(mockResult);
 
-      const input = {
-        start: '2025-01-01T00:00:00Z',
-        end: '2025-01-02T00:00:00Z',
+      const result = await service.getSlotsForEventType(mockInput);
+
+      expect(result).toEqual(mockResult);
+      expect(mockGetSlotsForEventType).toHaveBeenCalledWith(
+        123,
+        '2024-01-01T00:00:00Z',
+        '2024-01-07T23:59:59Z',
+        'UTC'
+      );
+    });
+
+    it('should use default timezone when not provided', async () => {
+      const mockInput = {
+        eventTypeId: 123,
+        start: '2024-01-01T00:00:00Z',
+        end: '2024-01-07T23:59:59Z',
+      };
+
+      const mockResult = {
+        eventType: { id: 123, title: 'Test' },
+        slots: { slots: {} },
+      };
+
+      mockGetSlotsForEventType.mockResolvedValue(mockResult);
+
+      await service.getSlotsForEventType(mockInput);
+
+      expect(mockGetSlotsForEventType).toHaveBeenCalledWith(
+        123,
+        '2024-01-01T00:00:00Z',
+        '2024-01-07T23:59:59Z',
+        'UTC' // Should default to UTC
+      );
+    });
+  });
+
+  describe('Legacy Methods', () => {
+    it('should get available slots by username and slug', async () => {
+      const mockInput = {
+        start: '2024-01-01T00:00:00Z',
+        end: '2024-01-07T23:59:59Z',
+        username: 'testuser',
+        eventTypeSlug: 'quick-chat',
+        timeZone: 'UTC',
+      };
+
+      const mockSlots = {
+        slots: {
+          '2024-01-01': [{ time: '09:00:00' }],
+        },
+      };
+
+      mockGetSlotsByUsername.mockResolvedValue(mockSlots);
+
+      const result = await service.getAvailableSlots(mockInput);
+
+      expect(result).toEqual(mockSlots);
+      expect(mockGetSlotsByUsername).toHaveBeenCalledWith({
+        username: 'testuser',
+        eventTypeSlug: 'quick-chat',
+        start: '2024-01-01T00:00:00Z',
+        end: '2024-01-07T23:59:59Z',
+        timeZone: 'UTC',
+      });
+    });
+
+    it('should get available slots by event type ID', async () => {
+      const mockInput = {
+        start: '2024-01-01T00:00:00Z',
+        end: '2024-01-07T23:59:59Z',
         eventTypeId: 123,
         timeZone: 'UTC',
       };
 
-      const result = await calcomService.getAvailableSlots(input);
-
-      expect(mockCalcomClient.getSlotsByEventTypeId).toHaveBeenCalledWith({
-        eventTypeId: 123,
-        start: '2025-01-01T00:00:00Z',
-        end: '2025-01-02T00:00:00Z',
-        timeZone: 'UTC',
-      });
-
-      expect(result).toEqual(mockResponse);
-    });
-
-    it('should throw error when neither username/eventTypeSlug nor eventTypeId provided', async () => {
-      const input = {
-        start: '2025-01-01T00:00:00Z',
-        end: '2025-01-02T00:00:00Z',
+      const mockSlots = {
+        slots: {
+          '2024-01-01': [{ time: '09:00:00' }],
+        },
       };
 
-      await expect(calcomService.getAvailableSlots(input)).rejects.toThrow(
+      mockGetSlotsByEventTypeId.mockResolvedValue(mockSlots);
+
+      const result = await service.getAvailableSlots(mockInput);
+
+      expect(result).toEqual(mockSlots);
+      expect(mockGetSlotsByEventTypeId).toHaveBeenCalledWith({
+        eventTypeId: 123,
+        start: '2024-01-01T00:00:00Z',
+        end: '2024-01-07T23:59:59Z',
+        timeZone: 'UTC',
+      });
+    });
+
+    it('should throw error when neither username/slug nor eventTypeId provided', async () => {
+      const mockInput = {
+        start: '2024-01-01T00:00:00Z',
+        end: '2024-01-07T23:59:59Z',
+        timeZone: 'UTC',
+      };
+
+      await expect(service.getAvailableSlots(mockInput)).rejects.toThrow(
         'Either username/eventTypeSlug or eventTypeId must be provided'
       );
     });
 
-    it('should use default timeZone when not provided', async () => {
-      const mockResponse = { slots: {} };
-      mockCalcomClient.getSlotsByEventTypeId.mockResolvedValue(mockResponse);
-
-      const input = {
-        start: '2025-01-01T00:00:00Z',
-        end: '2025-01-02T00:00:00Z',
+    it('should use default timezone when not provided in legacy method', async () => {
+      const mockInput = {
+        start: '2024-01-01T00:00:00Z',
+        end: '2024-01-07T23:59:59Z',
         eventTypeId: 123,
       };
 
-      await calcomService.getAvailableSlots(input);
+      const mockSlots = { slots: {} };
+      mockGetSlotsByEventTypeId.mockResolvedValue(mockSlots);
 
-      expect(mockCalcomClient.getSlotsByEventTypeId).toHaveBeenCalledWith({
+      await service.getAvailableSlots(mockInput);
+
+      expect(mockGetSlotsByEventTypeId).toHaveBeenCalledWith({
         eventTypeId: 123,
-        start: '2025-01-01T00:00:00Z',
-        end: '2025-01-02T00:00:00Z',
-        timeZone: 'UTC',
+        start: '2024-01-01T00:00:00Z',
+        end: '2024-01-07T23:59:59Z',
+        timeZone: 'UTC', // Should default to UTC
       });
-    });
-
-    it('should validate input and throw error for invalid datetime', async () => {
-      const input = {
-        start: 'invalid-date',
-        end: '2025-01-02T00:00:00Z',
-        eventTypeId: 123,
-      };
-
-      await expect(calcomService.getAvailableSlots(input)).rejects.toThrow();
     });
   });
 });

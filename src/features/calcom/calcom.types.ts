@@ -15,6 +15,20 @@ export const GetSlotsInputSchema = z.object({
 export type GetSlotsInput = z.infer<typeof GetSlotsInputSchema>;
 
 /**
+ * Input validation schema for getting slots by event type ID (conversational flow)
+ */
+export const GetEventTypeSlotsInputSchema = z.object({
+  eventTypeId: z.number(),
+  start: z.string().datetime(),
+  end: z.string().datetime(),
+  timeZone: z.string().default('UTC').optional(),
+});
+
+export type GetEventTypeSlotsInput = z.infer<
+  typeof GetEventTypeSlotsInputSchema
+>;
+
+/**
  * Cal.com slot interface (re-exported from client)
  */
 export interface CalcomSlot {

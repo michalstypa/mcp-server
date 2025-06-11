@@ -1,12 +1,14 @@
-import { CalcomClient } from './calcom.client.js';
+import { CalcomClient, EventTypeOption } from './calcom.client.js';
 import {
   GetSlotsInput,
   GetSlotsInputSchema,
   CalcomSlotsResponse,
+  GetEventTypeSlotsInput,
+  GetEventTypeSlotsInputSchema,
 } from './calcom.types.js';
 
 /**
- * Cal.com service for handling slot requests
+ * Cal.com service for handling slot requests and conversational flow
  */
 export class CalcomService {
   private calcomClient: CalcomClient | null = null;
@@ -22,7 +24,35 @@ export class CalcomService {
   }
 
   /**
-   * Get available slots from Cal.com
+   * Get available event types for user selection (Step 1 of conversational flow)
+   */
+  async getEventTypeOptions(): Promise<EventTypeOption[]> {
+    const client = this.getCalcomClient();
+    return await client.getEventTypeOptions();
+  }
+
+  /**
+   * Get available slots for a specific event type ID (Step 2 of conversational flow)
+   */
+  async getSlotsForEventType(input: GetEventTypeSlotsInput): Promise<{
+    eventType: any;
+    slots: CalcomSlotsResponse;
+  }> {
+    const validatedInput = GetEventTypeSlotsInputSchema.parse(input);
+    const timeZone = validatedInput.timeZone || 'UTC';
+
+    const client = this.getCalcomClient();
+
+    return await client.getSlotsForEventType(
+      validatedInput.eventTypeId,
+      validatedInput.start,
+      validatedInput.end,
+      timeZone
+    );
+  }
+
+  /**
+   * Get available slots from Cal.com (legacy method - maintains backward compatibility)
    */
   async getAvailableSlots(input: GetSlotsInput): Promise<CalcomSlotsResponse> {
     // Validate input and apply defaults
