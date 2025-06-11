@@ -1,0 +1,125 @@
+MCP SERVER PRODUCT REQUIREMENTS DOCUMENT (PRD)
+
+1 PURPOSE
+Build a minimal yet extensible MCP server that pulls available meeting slots from the Cal.com API. You use it first through a local CLI. It must be easy to host for outside clients later.
+
+2 GOALS
+
+    Expose one capability: GET_AVAILABLE_SLOTS
+
+    Offer two transport layers: STDIO and streamable HTTP (chunked response)
+
+    Written in TypeScript, runs on Node 20+ and inside Docker
+
+    All configuration through environment variables
+
+    Professional project structure with linting, tests and CI hooks
+
+    Single Dockerfile and docker-compose.yml produce a working container
+
+3 NON-GOALS
+Multi-tenant Cal.com accounts
+OAuth or other auth flows
+Any UI
+Kubernetes manifests
+Enforced coverage thresholds
+
+4 SUCCESS METRICS
+Extra latency against Cal.com ≤150 ms on a dev laptop
+Zero ESLint errors and Prettier passes
+docker compose up yields a ready service in under 60 s
+All tests green in CI
+
+5 USER STORIES
+ID	As a	I want	So that
+U1	Local dev	Pipe JSON into STDIO and get JSON responses	Taskmaster works offline
+U2	API client	Call /slots and stream JSON chunks	Front ends can update live
+U3	DevOps	Run docker compose up	Deployment stays reproducible
+U4	Contributor	Read clean code with tests	I can add new skills fast
+
+6 FUNCTIONAL REQUIREMENTS
+Ref	Requirement
+F1	STDIO protocol is NDJSON, one JSON object per line. Requests carry id, type and payload. Responses echo id.
+F2	HTTP GET /slots?start=…&end=… streams NDJSON chunks separated by \n.
+F3	Both transports call Cal.com GET /v1/availability using CALCOM_API_TOKEN.
+F4	Errors return { error: { code, message } }.
+F5	CALCOM_API_TOKEN must exist at startup or the server exits with error.
+
+7 NON-FUNCTIONAL REQUIREMENTS
+Category	Requirement
+Performance	Handle 100 concurrent HTTP clients on a 2-core box without slow-down
+Reliability	Forward Cal.com failures upstream within 1 s
+Security	Never log the API token
+Observability	Use pino for structured logs. Expose Prometheus metrics at /metrics
+Maintainability	All TypeScript, strict mode, ESM
+Portability	One image (~120 MB) based on node:20-alpine
+
+8 TECHNICAL ARCHITECTURE
+
+src
+├─ features
+│ └─ availability
+│ ├─ availability.controller.ts HTTP and STDIO handlers
+│ ├─ availability.service.ts business logic
+│ ├─ availability.mapper.ts Cal.com → DTO
+│ ├─ availability.test.ts
+│ └─ index.ts feature barrel
+├─ infra
+│ ├─ calcom
+│ │ └─ calcom.client.ts thin axios wrapper with retry
+│ ├─ transport
+│ │ ├─ http.server.ts Express bootstrap
+│ │ └─ stdio.server.ts NDJSON loop
+│ ├─ logger.ts pino instance
+│ ├─ metrics.ts Prometheus setup
+│ └─ config.ts env parsing with zod
+├─ app.ts wires infra and features
+└─ index.ts CLI arg parsing chooses transport
+
+9 INTERFACES
+
+9.1 STDIO NDJSON
+Request:
+{ "id":"123", "type":"GET_AVAILABLE_SLOTS", "payload":{ "start":"...", "end":"..." } }
+Response:
+{ "id":"123", "ok":true, "payload":[ { "start":"...", "end":"..." } ] }
+
+9.2 HTTP chunked
+GET /slots?start=2025-06-12T00:00:00Z&end=2025-06-13T00:00:00Z
+Returns 200, Content-Type: application/x-ndjson, Transfer-Encoding: chunked
+Each chunk: {"start":"...","end":"..."}\n
+
+10 CONFIGURATION
+Env var	Default	Description
+CALCOM_API_TOKEN	–	Required Cal.com personal token
+PORT	8080	HTTP port
+LOG_LEVEL	info	pino log level
+CALCOM_API_BASE	https://api.cal.com	Override for tests
+
+11 DEPLOYMENT
+
+Dockerfile (node:20-alpine, npm ci, copy code, CMD node dist/index.js)
+
+docker-compose.yml, service mcp, build ., env CALCOM_API_TOKEN and PORT, map 8080:8080, restart on failure
+
+12 LOGGING AND METRICS
+pino structured logs
+express-prom-bundle metrics at /metrics
+Prometheus scraping advised when hosted
+
+13 TESTING
+Vitest with ts-node and supertest
+nock for HTTP stubs
+Unit tests for service logic
+Integration test spins Express server with mocked Cal.com
+
+14 CODE QUALITY
+ESLint with eslint:recommended and @typescript-eslint/recommended
+Prettier default width 80
+Husky pre-commit hooks run lint, prettier check and vitest
+commitlint enforces Conventional Commits
+
+15 OPEN WORK
+Decide if future skills reuse /slots or new paths
+Revisit Deno later, stay on Node 20+ for now
+Add GitHub Actions workflow for lint, test and Docker build
