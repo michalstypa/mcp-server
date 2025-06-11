@@ -1,5 +1,10 @@
 #!/usr/bin/env node
 
+// Load environment variables from .env file first (before any other imports)
+// This ensures that all features can access environment variables
+import { config as loadDotenv } from 'dotenv';
+loadDotenv();
+
 import { startServer } from './server.js';
 import { config } from './infra/config.js';
 import { createServerLogger, logError } from './infra/logger.js';

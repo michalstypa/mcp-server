@@ -2,12 +2,16 @@ import { featureRegistry } from '../infra/features.js';
 
 // Import all available features
 import { calcomFeature } from './calcom/index.js';
+import { demoFeature } from './demo/index.js';
 
 /**
  * Initialize and register all available features
  */
 export function initializeFeatures(): void {
-  // Register Cal.com feature
+  // Register Demo feature (always available, no external dependencies)
+  featureRegistry.addFeature(demoFeature);
+
+  // Register Cal.com feature (requires CALCOM_API_TOKEN)
   featureRegistry.addFeature(calcomFeature);
 
   // Future features can be added here:
