@@ -1,145 +1,94 @@
 # Backtick MCP Server
 
-A minimal yet extensible MCP server that provides calendar availability functionality through Cal.com API integration.
+A Model Context Protocol (MCP) server that provides integration capabilities for various services.
 
 ## Features
 
-- **GET_AVAILABLE_SLOTS**: Retrieve available meeting slots from Cal.com
-- **Dual Transport**: Supports both STDIO (NDJSON) and HTTP (chunked response) protocols
-- **Production Ready**: Docker support, structured logging, and Prometheus metrics
-- **Type Safe**: Written in TypeScript with strict mode enabled
+- **Demo Tools**: Basic testing and utility tools (ECHO, SYSTEM_INFO, RANDOM_UUID)
+- **Cal.com Integration**: Get available meeting slots from Cal.com
+- **Environment Variable Support**: Configurable via .env file
+- **Multiple Transport Modes**: STDIO and HTTP support
 
 ## Quick Start
 
-### Prerequisites
-
-- Node.js 20+
-- Cal.com API token
-
-### Installation
-
+### 1. Install Dependencies
 ```bash
 npm install
 ```
 
-### Configuration
-
-Create a `.env` file:
-
+### 2. Build the Server
 ```bash
-CALCOM_API_TOKEN=your_cal_com_api_token_here
-PORT=8080
-LOG_LEVEL=info
+npm run build
+```
+
+### 3. Configure Environment Variables
+Create a `.env` file in the project root:
+```env
+# Cal.com Integration Configuration
+CALCOM_API_TOKEN=your_calcom_api_token_here
 CALCOM_API_BASE=https://api.cal.com
 ```
 
-### Development
-
+### 4. Run the Server
 ```bash
-# Run in development mode
-npm run dev
-
-# Build for production
-npm run build
-
-# Start production server
+# STDIO mode (default)
 npm start
 
-# Run tests
-npm test
-
-# Lint and format
-npm run lint
-npm run format
+# HTTP mode
+npm start -- --http --port=3000
 ```
 
-### Usage
+## Claude Desktop Integration
 
-#### STDIO Mode
+To use this MCP server with Claude Desktop on Mac:
 
-```bash
-echo '{"id":"123","type":"GET_AVAILABLE_SLOTS","payload":{"start":"2025-06-12T00:00:00Z","end":"2025-06-13T00:00:00Z"}}' | npm run dev -- stdio
-```
+### 1. Configure Claude Desktop
+Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
-#### HTTP Mode
-
-```bash
-# Start HTTP server
-npm run dev -- http
-
-# Query available slots
-curl "http://localhost:8080/slots?start=2025-06-12T00:00:00Z&end=2025-06-13T00:00:00Z"
-```
-
-## Docker
-
-```bash
-# Build and run with docker-compose
-docker-compose up
-
-# Or build manually
-docker build -t backtick-mcp-server .
-docker run -e CALCOM_API_TOKEN=your_token backtick-mcp-server
-```
-
-## API Reference
-
-### STDIO Protocol
-
-Request format:
 ```json
 {
-  "id": "unique-request-id",
-  "type": "GET_AVAILABLE_SLOTS",
-  "payload": {
-    "start": "2025-06-12T00:00:00Z",
-    "end": "2025-06-13T00:00:00Z"
+  "mcpServers": {
+    "backtick-mcp-server": {
+      "command": "node",
+      "args": ["/path/to/your/project/dist/index.js"],
+      "env": {
+        "CALCOM_API_TOKEN": "your_calcom_api_token_here",
+        "CALCOM_API_BASE": "https://api.cal.com"
+      }
+    }
   }
 }
 ```
 
-Response format:
-```json
-{
-  "id": "unique-request-id",
-  "ok": true,
-  "payload": [
-    {
-      "start": "2025-06-12T10:00:00Z",
-      "end": "2025-06-12T11:00:00Z"
-    }
-  ]
-}
-```
+Replace `/path/to/your/project` with your actual project path.
 
-### HTTP API
+### 2. Restart Claude Desktop
+Completely quit and restart the Claude Desktop application to load the new configuration.
 
-- `GET /slots?start=<ISO8601>&end=<ISO8601>` - Get available slots
-- `GET /metrics` - Prometheus metrics
-- `GET /health` - Health check
+### 3. Available Tools
+Once configured, Claude will have access to:
+- **ECHO**: Test message formatting with optional uppercase and prefix
+- **SYSTEM_INFO**: Get server system information
+- **RANDOM_UUID**: Generate random UUIDs (1-10 at a time)
+- **GET_AVAILABLE_SLOTS**: Get Cal.com meeting availability
 
-## Architecture
+## Development
 
+### Scripts
+- `npm run build` - Build TypeScript to JavaScript
+- `npm run dev` - Run in development mode with hot reload
+- `npm test` - Run tests
+- `npm run lint` - Run ESLint
+- `npm run format` - Format code with Prettier
+
+### Project Structure
 ```
 src/
-├── features/
-│   └── availability/
-│       ├── availability.controller.ts
-│       ├── availability.service.ts
-│       ├── availability.mapper.ts
-│       ├── availability.test.ts
-│       └── index.ts
-├── infra/
-│   ├── calcom/
-│   │   └── calcom.client.ts
-│   ├── transport/
-│   │   ├── http.server.ts
-│   │   └── stdio.server.ts
-│   ├── logger.ts
-│   ├── metrics.ts
-│   └── config.ts
-├── app.ts
-└── index.ts
+├── features/           # Feature implementations
+│   ├── demo/          # Demo tools (no external dependencies)
+│   └── calcom/        # Cal.com integration
+├── infra/             # Infrastructure (config, logging, features)
+└── index.ts           # Main entry point
 ```
 
 ## License
