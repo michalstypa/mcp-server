@@ -1,5 +1,5 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
-import { config } from '../config.js';
+import { loadCalcomConfig } from './calcom.config.js';
 
 /**
  * Cal.com API error response interface
@@ -130,10 +130,13 @@ export class CalcomClient {
   private readonly retryConfig: RetryConfig;
 
   constructor(
-    apiToken: string = config.CALCOM_API_TOKEN,
-    baseURL: string = config.CALCOM_API_BASE,
+    apiToken?: string,
+    baseURL?: string,
     retryConfig: Partial<RetryConfig> = {}
   ) {
+    // Load feature-specific config if not provided
+    const config = loadCalcomConfig();
+
     this.retryConfig = {
       maxRetries: 3,
       baseDelay: 1000,
@@ -142,9 +145,9 @@ export class CalcomClient {
     };
 
     this.axiosInstance = axios.create({
-      baseURL,
+      baseURL: baseURL || config.CALCOM_API_BASE,
       headers: {
-        Authorization: `Bearer ${apiToken}`,
+        Authorization: `Bearer ${apiToken || config.CALCOM_API_TOKEN}`,
         'Content-Type': 'application/json',
       },
       timeout: 30000, // 30 second timeout
@@ -288,8 +291,3 @@ export class CalcomClient {
     }
   }
 }
-
-/**
- * Default Cal.com client instance
- */
-export const calcomClient = new CalcomClient();

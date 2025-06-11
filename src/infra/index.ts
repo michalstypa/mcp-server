@@ -3,10 +3,4 @@
  * Provides core infrastructure components for the Backtick MCP Server
  */
 
-export {
-  config,
-  type Config,
-  isProduction,
-  isDevelopment,
-  isTest,
-} from './config.js';
+export { config, type ServerConfig } from './config.js';

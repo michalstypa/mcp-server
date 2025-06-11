@@ -1,19 +1,10 @@
 import { z } from 'zod';
-import { config as dotenvConfig } from 'dotenv';
-
-// Load environment variables from .env file
-dotenvConfig();
 
 /**
- * Environment configuration schema using zod
- * Validates and parses environment variables with defaults
+ * Generic server configuration schema
+ * Only contains server-level configuration, not feature-specific config
  */
-const envSchema = z.object({
-  CALCOM_API_TOKEN: z
-    .string()
-    .min(1, 'CALCOM_API_TOKEN is required')
-    .describe('Cal.com API token for authentication'),
-
+const serverConfigSchema = z.object({
   PORT: z
     .string()
     .default('8080')
@@ -24,13 +15,7 @@ const envSchema = z.object({
   LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace'])
     .default('info')
-    .describe('Pino log level'),
-
-  CALCOM_API_BASE: z
-    .string()
-    .url()
-    .default('https://api.cal.com')
-    .describe('Cal.com API base URL'),
+    .describe('Log level'),
 
   NODE_ENV: z
     .enum(['development', 'production', 'test'])
@@ -39,35 +24,37 @@ const envSchema = z.object({
 });
 
 /**
- * Parsed and validated environment configuration
+ * Parsed and validated server configuration
  */
-export type Config = z.infer<typeof envSchema>;
+export type ServerConfig = z.infer<typeof serverConfigSchema>;
 
 /**
- * Parse and validate environment variables
- * @throws {Error} If required environment variables are missing or invalid
+ * Load and validate server configuration
+ * This only validates generic server config, not feature-specific config
  */
-function parseConfig(): Config {
-  const result = envSchema.safeParse(process.env);
-
-  if (!result.success) {
-    const errorMessages = result.error.errors
-      .map(err => `${err.path.join('.')}: ${err.message}`)
-      .join('\n');
-
-    throw new Error(
-      `Environment configuration validation failed:\n${errorMessages}`
-    );
+function loadServerConfig(): ServerConfig {
+  try {
+    return serverConfigSchema.parse({
+      PORT: process.env.PORT,
+      LOG_LEVEL: process.env.LOG_LEVEL,
+      NODE_ENV: process.env.NODE_ENV,
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      const issues = error.issues
+        .map(issue => `${issue.path.join('.')}: ${issue.message}`)
+        .join(', ');
+      throw new Error(`Server configuration error: ${issues}`);
+    }
+    throw error;
   }
-
-  return result.data;
 }
 
 /**
- * Global configuration instance
- * Validates environment variables on module load
+ * Global server configuration instance
+ * Features should load their own configuration separately
  */
-export const config = parseConfig();
+export const config = loadServerConfig();
 
 /**
  * Utility function to check if running in production

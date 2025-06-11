@@ -5,13 +5,13 @@ Build a minimal yet extensible MCP server that pulls available meeting slots fro
 
 2 GOALS
 
-    Expose one capability: GET_AVAILABLE_SLOTS
+    Expose one capability: GET_AVAILABLE_SLOTS (when Cal.com feature is loaded)
 
-    Offer two transport layers: STDIO and streamable HTTP (chunked response)
+    Offer two transport layers: STDIO and HTTP using official MCP SDK
 
     Written in TypeScript, runs on Node 20+ and inside Docker
 
-    All configuration through environment variables
+    Modular feature-based architecture with conditional loading
 
     Professional project structure with linting, tests and CI hooks
 
@@ -29,89 +29,110 @@ Extra latency against Cal.com ≤150 ms on a dev laptop
 Zero ESLint errors and Prettier passes
 docker compose up yields a ready service in under 60 s
 All tests green in CI
+Server can run with zero features when no config is provided
 
 5 USER STORIES
 ID	As a	I want	So that
 U1	Local dev	Pipe JSON into STDIO and get JSON responses	Taskmaster works offline
-U2	API client	Call /slots and stream JSON chunks	Front ends can update live
+U2	API client	Call /mcp endpoints and get MCP JSON-RPC responses	Standard MCP integration works
 U3	DevOps	Run docker compose up	Deployment stays reproducible
 U4	Contributor	Read clean code with tests	I can add new skills fast
+U5	Developer	Run server without Cal.com config	I can test basic functionality
 
 6 FUNCTIONAL REQUIREMENTS
 Ref	Requirement
-F1	STDIO protocol is NDJSON, one JSON object per line. Requests carry id, type and payload. Responses echo id.
-F2	HTTP GET /slots?start=…&end=… streams NDJSON chunks separated by \n.
-F3	Both transports call Cal.com GET /v1/availability using CALCOM_API_TOKEN.
-F4	Errors return { error: { code, message } }.
-F5	CALCOM_API_TOKEN must exist at startup or the server exits with error.
+F1	STDIO protocol uses MCP SDK StdioServerTransport with proper JSON-RPC handling.
+F2	HTTP mode uses MCP SDK StreamableHTTPServerTransport with Express for MCP endpoints.
+F3	Features are self-contained modules that register conditionally based on configuration.
+F4	Cal.com feature only loads when CALCOM_API_TOKEN environment variable is present.
+F5	Server can start with zero features and show appropriate warnings.
+F6	Each feature validates its own configuration and handles loading errors gracefully.
+F7	Errors return standard MCP JSON-RPC error responses.
 
 7 NON-FUNCTIONAL REQUIREMENTS
 Category	Requirement
 Performance	Handle 100 concurrent HTTP clients on a 2-core box without slow-down
 Reliability	Forward Cal.com failures upstream within 1 s
-Security	Never log the API token
-Observability	Use pino for structured logs. Expose Prometheus metrics at /metrics
-Maintainability	All TypeScript, strict mode, ESM
+Security	Never log API tokens, use secure session IDs for HTTP mode
+Observability	Use structured console logs
+Maintainability	All TypeScript, strict mode, ESM, feature-based architecture
 Portability	One image (~120 MB) based on node:20-alpine
+Modularity	Features can be added/removed without affecting core server
 
 8 TECHNICAL ARCHITECTURE
 
-src
-├─ features
-│ └─ availability
-│ ├─ availability.controller.ts HTTP and STDIO handlers
-│ ├─ availability.service.ts business logic
-│ ├─ availability.mapper.ts Cal.com → DTO
-│ ├─ availability.test.ts
-│ └─ index.ts feature barrel
-├─ infra
-│ ├─ calcom
-│ │ └─ calcom.client.ts thin axios wrapper with retry
-│ ├─ transport
-│ │ ├─ http.server.ts Express bootstrap
-│ │ └─ stdio.server.ts NDJSON loop
-│ ├─ logger.ts pino instance
-│ ├─ metrics.ts Prometheus setup
-│ └─ config.ts env parsing with zod
-├─ app.ts wires infra and features
-└─ index.ts CLI arg parsing chooses transport
+src/
+├── server.ts                    # Server setup - transport selection & feature registration
+├── features/
+│   └── calcom/                  # Cal.com feature module (conditionally loaded)
+│       ├── calcom.config.ts     # Feature-specific configuration validation
+│       ├── calcom.client.ts     # Cal.com API client with retry logic
+│       ├── calcom.service.ts    # Cal.com business logic
+│       ├── calcom.feature.ts    # MCP tool registration & handlers
+│       ├── calcom.types.ts      # Types and Zod schemas
+│       └── index.ts             # Feature exports
+├── infra/
+│   └── config.ts                # Generic server configuration only
+└── index.ts                     # CLI entry point with transport mode selection
+
+Key Principles:
+- Server is minimal - just MCP setup, transport selection, and feature registration
+- Features are completely self-contained with their own config, client, service, and types
+- Each feature exports a registration function: `registerFeature(server: McpServer): boolean`
+- Features only load if their required configuration is present
+- Generic infrastructure contains no feature-specific logic
+- HTTP mode provides standard MCP JSON-RPC endpoints via StreamableHTTPServerTransport
 
 9 INTERFACES
 
-9.1 STDIO NDJSON
-Request:
-{ "id":"123", "type":"GET_AVAILABLE_SLOTS", "payload":{ "start":"...", "end":"..." } }
-Response:
-{ "id":"123", "ok":true, "payload":[ { "start":"...", "end":"..." } ] }
+9.1 MCP STDIO
+Standard MCP JSON-RPC over STDIO using @modelcontextprotocol/sdk StdioServerTransport
+Available tools depend on loaded features:
+- GET_AVAILABLE_SLOTS (if Cal.com feature loaded)
 
-9.2 HTTP chunked
-GET /slots?start=2025-06-12T00:00:00Z&end=2025-06-13T00:00:00Z
-Returns 200, Content-Type: application/x-ndjson, Transfer-Encoding: chunked
-Each chunk: {"start":"...","end":"..."}\n
+9.2 MCP HTTP
+Standard MCP Streamable HTTP using @modelcontextprotocol/sdk StreamableHTTPServerTransport
+Endpoints:
+- POST /mcp - JSON-RPC requests
+- GET /mcp - SSE streams for real-time updates
+- DELETE /mcp - Session termination
+- GET /health - Health check (always available)
 
 10 CONFIGURATION
+
+10.1 Server Configuration (Always Required)
 Env var	Default	Description
-CALCOM_API_TOKEN	–	Required Cal.com personal token
-PORT	8080	HTTP port
-LOG_LEVEL	info	pino log level
-CALCOM_API_BASE	https://api.cal.com	Override for tests
+PORT	8080	HTTP port (HTTP mode only)
+LOG_LEVEL	info	Log level
+NODE_ENV	development	Node.js environment
+
+10.2 Feature Configuration (Feature-Specific)
+Cal.com Feature:
+CALCOM_API_TOKEN	–	Required for Cal.com feature to load
+CALCOM_API_BASE	https://api.cal.com	Cal.com API base URL
+
+Feature loading behavior:
+- Cal.com feature only loads if CALCOM_API_TOKEN is present
+- Server starts with zero features if no feature configs are provided
+- Each feature validates its own configuration independently
 
 11 DEPLOYMENT
 
 Dockerfile (node:20-alpine, npm ci, copy code, CMD node dist/index.js)
 
-docker-compose.yml, service mcp, build ., env CALCOM_API_TOKEN and PORT, map 8080:8080, restart on failure
+docker-compose.yml, service mcp, build ., env variables, map 8080:8080, restart on failure
 
 12 LOGGING AND METRICS
-pino structured logs
-express-prom-bundle metrics at /metrics
-Prometheus scraping advised when hosted
+Structured console logs with feature loading information
+Health endpoint at /health in HTTP mode
+Feature loading status logged at startup
+Future: Prometheus metrics as separate feature module
 
 13 TESTING
-Vitest with ts-node and supertest
-nock for HTTP stubs
-Unit tests for service logic
-Integration test spins Express server with mocked Cal.com
+Vitest for unit and integration tests
+Feature-specific test suites in each feature directory
+Integration tests for both STDIO and HTTP transports
+Mock feature configurations for testing
 
 14 CODE QUALITY
 ESLint with eslint:recommended and @typescript-eslint/recommended
@@ -119,7 +140,17 @@ Prettier default width 80
 Husky pre-commit hooks run lint, prettier check and vitest
 commitlint enforces Conventional Commits
 
-15 OPEN WORK
-Decide if future skills reuse /slots or new paths
-Revisit Deno later, stay on Node 20+ for now
+15 FEATURE DEVELOPMENT
+Adding new features:
+1. Create feature directory in src/features/
+2. Implement feature-specific config validation
+3. Create feature registration function
+4. Export registration from feature index.ts
+5. Import and register in src/server.ts
+6. Features should gracefully handle missing configuration
+
+16 OPEN WORK
 Add GitHub Actions workflow for lint, test and Docker build
+Implement additional MCP features as separate modules
+Add feature discovery and dynamic loading capabilities
+Consider feature marketplace/plugin system

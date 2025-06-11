@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import nock from 'nock';
 import {
   CalcomClient,
@@ -8,6 +8,10 @@ import {
   type GetSlotsByUsernameParams,
   type GetSlotsByEventTypeIdParams,
 } from './calcom.client.js';
+
+// Set up environment variables for testing
+vi.stubEnv('CALCOM_API_TOKEN', 'test_token_123');
+vi.stubEnv('CALCOM_API_BASE', 'https://test.cal.com');
 
 describe('CalcomClient', () => {
   const mockApiToken = 'test_token_123';
