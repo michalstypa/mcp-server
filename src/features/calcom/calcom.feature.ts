@@ -150,18 +150,3 @@ export class CalcomFeature implements Feature {
  * Cal.com feature instance
  */
 export const calcomFeature = new CalcomFeature();
-
-/**
- * Legacy registration function for backward compatibility
- * @deprecated Use the standardized CalcomFeature class instead
- */
-export async function registerCalcomFeature(
-  server: McpServer
-): Promise<boolean> {
-  const result = await calcomFeature.register(server);
-  if (!result.success) {
-    const logger = createFeatureLogger('calcom-legacy');
-    logger.error(`Cal.com feature failed to load: ${result.error}`);
-  }
-  return result.success;
-}
