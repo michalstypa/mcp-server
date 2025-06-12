@@ -1,11 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { getErrorMessage } from '../../infra/utils.js';
-import type {
-  Feature,
-  FeatureInfo,
-  FeatureRegistrationResult,
-} from '../../infra/features.js';
+import type { Feature, FeatureInfo, FeatureRegistrationResult } from '../../infra/features.js';
 import { createFeatureLogger } from '../../infra/logger.js';
 
 /**
@@ -15,9 +11,6 @@ import { createFeatureLogger } from '../../infra/logger.js';
 export class DemoFeature implements Feature {
   private logger = createFeatureLogger('demo');
 
-  /**
-   * Get feature information
-   */
   getInfo(): FeatureInfo {
     return {
       name: 'Demo',
@@ -27,33 +20,19 @@ export class DemoFeature implements Feature {
     };
   }
 
-  /**
-   * Check if the feature can be loaded (always true for demo)
-   */
   canLoad(): boolean {
-    return true; // Demo feature has no external dependencies
+    return true;
   }
 
-  /**
-   * Register the feature with the MCP server
-   */
   async register(server: McpServer): Promise<FeatureRegistrationResult> {
     try {
-      // Register ECHO tool
       server.tool(
         'ECHO',
         'Echo back the provided message with optional formatting',
         {
           message: z.string().describe('The message to echo back'),
-          uppercase: z
-            .boolean()
-            .optional()
-            .default(false)
-            .describe('Whether to return the message in uppercase'),
-          prefix: z
-            .string()
-            .optional()
-            .describe('Optional prefix to add to the message'),
+          uppercase: z.boolean().optional().default(false).describe('Whether to return the message in uppercase'),
+          prefix: z.string().optional().describe('Optional prefix to add to the message'),
         },
         async ({ message, uppercase, prefix }) => {
           let result = message;
@@ -77,44 +56,31 @@ export class DemoFeature implements Feature {
         }
       );
 
-      // Register SYSTEM_INFO tool
-      server.tool(
-        'SYSTEM_INFO',
-        'Get basic system information',
-        {},
-        async () => {
-          const info = {
-            timestamp: new Date().toISOString(),
-            nodeVersion: process.version,
-            platform: process.platform,
-            arch: process.arch,
-            uptime: process.uptime(),
-            memoryUsage: process.memoryUsage(),
-          };
+      server.tool('SYSTEM_INFO', 'Get basic system information', {}, async () => {
+        const info = {
+          timestamp: new Date().toISOString(),
+          nodeVersion: process.version,
+          platform: process.platform,
+          arch: process.arch,
+          uptime: process.uptime(),
+          memoryUsage: process.memoryUsage(),
+        };
 
-          return {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify(info, null, 2),
-              },
-            ],
-          };
-        }
-      );
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(info, null, 2),
+            },
+          ],
+        };
+      });
 
-      // Register RANDOM_UUID tool
       server.tool(
         'RANDOM_UUID',
         'Generate a random UUID',
         {
-          count: z
-            .number()
-            .min(1)
-            .max(10)
-            .optional()
-            .default(1)
-            .describe('Number of UUIDs to generate (1-10)'),
+          count: z.number().min(1).max(10).optional().default(1).describe('Number of UUIDs to generate (1-10)'),
         },
         async ({ count }) => {
           const { randomUUID } = await import('node:crypto');
@@ -149,7 +115,4 @@ export class DemoFeature implements Feature {
   }
 }
 
-/**
- * Demo feature instance
- */
 export const demoFeature = new DemoFeature();

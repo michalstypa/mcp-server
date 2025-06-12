@@ -1,9 +1,6 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 import { loadCalcomConfig } from './calcom.config.js';
 
-/**
- * Cal.com API error response interface
- */
 interface CalcomErrorResponse {
   error: {
     code: string;
@@ -11,9 +8,6 @@ interface CalcomErrorResponse {
   };
 }
 
-/**
- * Cal.com event type interface
- */
 export interface CalcomEventType {
   id: number;
   title: string;
@@ -48,16 +42,10 @@ export interface CalcomEventType {
   users?: any[];
 }
 
-/**
- * Cal.com event types response interface
- */
 export interface CalcomEventTypesResponse {
   event_types: CalcomEventType[];
 }
 
-/**
- * Cal.com slot interface
- */
 export interface CalcomSlot {
   time: string;
   attendees?: number;
@@ -69,37 +57,25 @@ export interface CalcomSlot {
   }>;
 }
 
-/**
- * Cal.com slots response interface
- */
 export interface CalcomSlotsResponse {
   slots: {
     [date: string]: CalcomSlot[];
   };
 }
 
-/**
- * Parameters for getting slots by event type ID
- */
 export interface GetSlotsParams {
   eventTypeId: number;
-  start: string; // ISO 8601 date string
-  end: string; // ISO 8601 date string
+  start: string;
+  end: string;
   timeZone: string;
 }
 
-/**
- * Retry configuration interface
- */
 interface RetryConfig {
   maxRetries: number;
   baseDelay: number;
   maxDelay: number;
 }
 
-/**
- * Cal.com client error class
- */
 export class CalcomClientError extends Error {
   constructor(
     message: string,
@@ -111,20 +87,12 @@ export class CalcomClientError extends Error {
   }
 }
 
-/**
- * Cal.com API client with retry logic
- */
 export class CalcomClient {
   private readonly axiosInstance: AxiosInstance;
   private readonly retryConfig: RetryConfig;
   private readonly apiToken: string;
 
-  constructor(
-    apiToken?: string,
-    baseURL?: string,
-    retryConfig: Partial<RetryConfig> = {}
-  ) {
-    // Load feature-specific config if not provided
+  constructor(apiToken?: string, baseURL?: string, retryConfig: Partial<RetryConfig> = {}) {
     const config = loadCalcomConfig();
 
     this.retryConfig = {
@@ -141,13 +109,10 @@ export class CalcomClient {
       headers: {
         'Content-Type': 'application/json',
       },
-      timeout: 30000, // 30 second timeout
+      timeout: 30000,
     });
   }
 
-  /**
-   * Get event types for the authenticated user
-   */
   async getEventTypes(): Promise<CalcomEventType[]> {
     const response = await this.makeRequest<CalcomEventTypesResponse>({
       method: 'GET',
@@ -160,9 +125,6 @@ export class CalcomClient {
     return response.data.event_types;
   }
 
-  /**
-   * Get available slots by event type ID
-   */
   async getSlots(params: GetSlotsParams): Promise<CalcomSlotsResponse> {
     const response = await this.makeRequest<CalcomSlotsResponse>({
       method: 'GET',
@@ -183,64 +145,41 @@ export class CalcomClient {
     return response.data;
   }
 
-  /**
-   * Make HTTP request with retry logic
-   */
-  private async makeRequest<T>(
-    config: AxiosRequestConfig,
-    attempt: number = 1
-  ): Promise<AxiosResponse<T>> {
+  private async makeRequest<T>(config: AxiosRequestConfig, attempt: number = 1): Promise<AxiosResponse<T>> {
     try {
       const response = await this.axiosInstance.request<T>(config);
       return response;
     } catch (error) {
-      // Handle error and determine if we should retry
       if (attempt >= this.retryConfig.maxRetries || !this.shouldRetry(error)) {
         throw this.handleError(error);
       }
 
-      // Retry with exponential backoff
       const delay = this.calculateDelay(attempt);
       await this.sleep(delay);
       return this.makeRequest<T>(config, attempt + 1);
     }
   }
 
-  /**
-   * Determine if request should be retried
-   */
   private shouldRetry(error: any): boolean {
-    // Retry on network errors
     if (!error.response) {
       return true;
     }
 
-    // Retry on 5xx server errors
     const status = error.response.status;
     return status >= 500 && status < 600;
   }
 
-  /**
-   * Calculate exponential backoff delay
-   */
   private calculateDelay(attempt: number): number {
     const delay = this.retryConfig.baseDelay * Math.pow(2, attempt - 1);
     return Math.min(delay, this.retryConfig.maxDelay);
   }
 
-  /**
-   * Sleep for specified milliseconds
-   */
   private sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  /**
-   * Handle axios errors and convert to CalcomClientError
-   */
   private handleError(error: any): CalcomClientError {
     if (error.response) {
-      // Server responded with error status
       const statusCode = error.response.status;
       const errorData = error.response.data as CalcomErrorResponse;
 
@@ -249,12 +188,8 @@ export class CalcomClient {
 
       return new CalcomClientError(message, statusCode, code);
     } else if (error.request) {
-      // Network error
-      return new CalcomClientError(
-        'Network error: Unable to reach Cal.com API'
-      );
+      return new CalcomClientError('Network error: Unable to reach Cal.com API');
     } else {
-      // Request setup error
       return new CalcomClientError(`Request error: ${error.message}`);
     }
   }

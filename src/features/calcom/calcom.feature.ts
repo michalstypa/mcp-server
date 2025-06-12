@@ -3,27 +3,13 @@ import { z } from 'zod';
 import { canLoadCalcomFeature, loadCalcomConfig } from './calcom.config.js';
 import { calcomService } from './calcom.service.js';
 import { GetSlotsInputSchema } from './calcom.types.js';
-import {
-  createSuccessResponse,
-  createErrorResponse,
-  getErrorMessage,
-} from '../../infra/utils.js';
-import type {
-  Feature,
-  FeatureInfo,
-  FeatureRegistrationResult,
-} from '../../infra/features.js';
+import { createSuccessResponse, createErrorResponse, getErrorMessage } from '../../infra/utils.js';
+import type { Feature, FeatureInfo, FeatureRegistrationResult } from '../../infra/features.js';
 import { createFeatureLogger } from '../../infra/logger.js';
 
-/**
- * Cal.com feature implementation
- */
 export class CalcomFeature implements Feature {
   private logger = createFeatureLogger('calcom');
 
-  /**
-   * Get feature information
-   */
   getInfo(): FeatureInfo {
     return {
       name: 'Cal.com',
@@ -33,45 +19,28 @@ export class CalcomFeature implements Feature {
     };
   }
 
-  /**
-   * Check if the feature can be loaded
-   */
   canLoad(): boolean {
     return canLoadCalcomFeature();
   }
 
-  /**
-   * Register the feature with the MCP server
-   */
   async register(server: McpServer): Promise<FeatureRegistrationResult> {
     try {
-      // Validate configuration (will throw if invalid)
       loadCalcomConfig();
 
       const toolsRegistered: string[] = [];
       const promptsRegistered: string[] = [];
       const resourcesRegistered: string[] = [];
 
-      // Register GET_EVENT_TYPES tool
-      server.tool(
-        'GET_EVENT_TYPES',
-        'Get available Cal.com event types',
-        {},
-        async () => {
-          try {
-            const eventTypes = await calcomService.getEventTypes();
-            return createSuccessResponse(
-              { eventTypes },
-              'Available Cal.com event types'
-            );
-          } catch (error) {
-            return createErrorResponse('EVENT_TYPES_ERROR', error);
-          }
+      server.tool('GET_EVENT_TYPES', 'Get available Cal.com event types', {}, async () => {
+        try {
+          const eventTypes = await calcomService.getEventTypes();
+          return createSuccessResponse({ eventTypes }, 'Available Cal.com event types');
+        } catch (error) {
+          return createErrorResponse('EVENT_TYPES_ERROR', error);
         }
-      );
+      });
       toolsRegistered.push('GET_EVENT_TYPES');
 
-      // Register GET_AVAILABLE_SLOTS tool
       server.tool(
         'GET_AVAILABLE_SLOTS',
         'Get available meeting slots from Cal.com',
@@ -84,10 +53,7 @@ export class CalcomFeature implements Feature {
               eventTypeId,
               timeZone,
             });
-            return createSuccessResponse(
-              { slots: result },
-              'Available meeting slots'
-            );
+            return createSuccessResponse({ slots: result }, 'Available meeting slots');
           } catch (error) {
             return createErrorResponse('AVAILABLE_SLOTS_ERROR', error);
           }
@@ -95,29 +61,16 @@ export class CalcomFeature implements Feature {
       );
       toolsRegistered.push('GET_AVAILABLE_SLOTS');
 
-      // Register MEETING_BOOKING_FLOW prompt - this initiates the guided flow
       server.prompt(
         'MEETING_BOOKING_FLOW',
         'Start the guided meeting booking process',
         {
-          startDate: z
-            .string()
-            .datetime()
-            .optional()
-            .describe('Optional start date and time in ISO 8601 format'),
-          endDate: z
-            .string()
-            .datetime()
-            .optional()
-            .describe('Optional end date and time in ISO 8601 format'),
-          timeZone: z
-            .string()
-            .optional()
-            .describe('Time zone for the meeting (optional)'),
+          startDate: z.string().datetime().optional().describe('Optional start date and time in ISO 8601 format'),
+          endDate: z.string().datetime().optional().describe('Optional end date and time in ISO 8601 format'),
+          timeZone: z.string().optional().describe('Time zone for the meeting (optional)'),
         },
         async ({ startDate, endDate, timeZone }) => {
           try {
-            // First, fetch available event types
             const eventTypes = await calcomService.getEventTypes();
 
             return {
@@ -179,14 +132,11 @@ Please try again, or contact support if the issue persists.`,
       );
       promptsRegistered.push('MEETING_BOOKING_FLOW');
 
-      // Register EVENT_TYPE_SELECTION prompt - helps guide users to select event types
       server.prompt(
         'EVENT_TYPE_SELECTION',
         'Help user select from available Cal.com event types',
         {
-          userInput: z
-            .string()
-            .describe("User's input about which meeting type they want"),
+          userInput: z.string().describe("User's input about which meeting type they want"),
         },
         async ({ userInput }) => {
           try {
@@ -244,18 +194,13 @@ Please try using the GET_EVENT_TYPES tool directly to see available options.`,
       );
       promptsRegistered.push('EVENT_TYPE_SELECTION');
 
-      // Register meeting booking workflow resource
-      server.resource(
-        'calcom://booking-workflow',
-        'Guide for multi-step meeting booking process',
-        {},
-        async () => {
-          return {
-            contents: [
-              {
-                uri: 'calcom://booking-workflow',
-                mimeType: 'text/markdown',
-                text: `# Meeting Booking Workflow
+      server.resource('calcom://booking-workflow', 'Guide for multi-step meeting booking process', {}, async () => {
+        return {
+          contents: [
+            {
+              uri: 'calcom://booking-workflow',
+              mimeType: 'text/markdown',
+              text: `# Meeting Booking Workflow
 
 ## Overview
 This Cal.com integration provides a guided multi-step process for booking meetings:
@@ -269,84 +214,47 @@ This Cal.com integration provides a guided multi-step process for booking meetin
 - \`GET_EVENT_TYPES\`: Fetch all available meeting types
 - \`GET_AVAILABLE_SLOTS\`: Get available time slots for a specific event type
 
-## Available Prompts
-- \`MEETING_BOOKING_FLOW\`: Initiates the guided booking process
-- \`EVENT_TYPE_SELECTION\`: Helps users select from available meeting types
+## Prompts
+- \`MEETING_BOOKING_FLOW\`: Start the guided booking process
+- \`EVENT_TYPE_SELECTION\`: Help users select from available event types
 
-## Workflow Steps
+## Usage Examples
 
-### Step 1: User Requests Meeting
-When a user asks for meeting availability:
-- Use the \`MEETING_BOOKING_FLOW\` prompt to start the guided process
-- This automatically fetches event types and presents them to the user
-- Optionally provide startDate, endDate, and timeZone parameters
+### Basic Meeting Booking
+1. Call MEETING_BOOKING_FLOW prompt to start
+2. User selects meeting type from the list
+3. Call GET_AVAILABLE_SLOTS with selected event type ID
+4. Present available time slots to user
 
-### Step 2: Event Type Selection  
-User indicates which meeting type they want:
-- Parse their response to identify the event type ID
-- Use the \`EVENT_TYPE_SELECTION\` prompt if clarification is needed
-- Event types have: id, title, slug, length (in minutes)
-
-### Step 3: Check Availability
-Once event type is confirmed:
-- Use \`GET_AVAILABLE_SLOTS\` with the event type ID
-- Provide start/end dates and timezone
-- Present available time slots to the user
-
-## Example Usage
-1. User: "I'd like to book a meeting"
-2. Assistant: Invoke \`MEETING_BOOKING_FLOW\` prompt
-3. User: "I want the 30-minute consultation"  
-4. Assistant: Parse selection, then use \`GET_AVAILABLE_SLOTS\` with appropriate event type ID
-5. Assistant: Present available time slots
-
-## Event Type Structure
-Each event type contains:
-- \`id\`: Unique identifier (required for GET_AVAILABLE_SLOTS)
-- \`title\`: Display name
-- \`slug\`: URL-friendly identifier
-- \`length\`: Duration in minutes
-- Other metadata fields
-
-## Error Handling
-- If event types cannot be fetched, inform user and suggest trying again
-- If slot availability fails, check event type ID and date parameters
-- Provide clear error messages with actionable next steps
-
-## Tips
-- Always use event type IDs (not titles) when calling GET_AVAILABLE_SLOTS
-- Parse user input flexibly (accept numbers, titles, or partial matches)
-- Provide clear options when multiple interpretations are possible
-- Include timezone information in availability requests
+### Event Type Selection Help
+1. User mentions wanting to book but unclear about type
+2. Call EVENT_TYPE_SELECTION prompt with user input
+3. Help user identify correct meeting type
+4. Proceed with GET_AVAILABLE_SLOTS once type is selected
 `,
-              },
-            ],
-          };
-        }
-      );
+            },
+          ],
+        };
+      });
       resourcesRegistered.push('calcom://booking-workflow');
-
-      this.logger.info('Cal.com feature registered successfully');
 
       return {
         success: true,
         toolsRegistered,
         promptsRegistered,
         resourcesRegistered,
+        info: this.getInfo(),
       };
     } catch (error) {
-      const errorMessage = getErrorMessage(error);
-      this.logger.error('Failed to register Cal.com feature:', errorMessage);
-
-      return {
+      const result: FeatureRegistrationResult = {
         success: false,
-        error: errorMessage,
+        error: getErrorMessage(error),
+        info: this.getInfo(),
       };
+
+      this.logger.error(`Cal.com feature failed to load: ${result.error}`);
+      return result;
     }
   }
 }
-
-/**
- * Cal.com feature instance
- */
 export const calcomFeature = new CalcomFeature();

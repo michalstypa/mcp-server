@@ -1,9 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { createFeatureLogger } from './logger.js';
 
-/**
- * Feature metadata interface
- */
 export interface FeatureInfo {
   name: string;
   description: string;
@@ -11,9 +8,6 @@ export interface FeatureInfo {
   enabled: boolean;
 }
 
-/**
- * Feature registration result
- */
 export interface FeatureRegistrationResult {
   success: boolean;
   error?: string;
@@ -24,78 +18,38 @@ export interface FeatureRegistrationResult {
   info?: FeatureInfo;
 }
 
-/**
- * Standard feature interface that all features must implement
- */
 export interface Feature {
-  /**
-   * Get feature information
-   */
   getInfo(): FeatureInfo;
-
-  /**
-   * Check if the feature can be loaded (e.g., has required config)
-   */
   canLoad(): boolean;
-
-  /**
-   * Register the feature with the MCP server
-   * @param server - The MCP server instance
-   * @returns Registration result with success status and details
-   */
-  register(
-    server: McpServer
-  ): Promise<FeatureRegistrationResult> | FeatureRegistrationResult;
-
-  /**
-   * Optional cleanup when the feature is unloaded
-   */
+  register(server: McpServer): Promise<FeatureRegistrationResult> | FeatureRegistrationResult;
   cleanup?(): Promise<void> | void;
 }
 
-/**
- * Feature registry to manage all features
- */
 export class FeatureRegistry {
   private features = new Map<string, Feature>();
   private registeredFeatures = new Map<string, FeatureRegistrationResult>();
   private logger = createFeatureLogger('registry');
 
-  /**
-   * Register a feature with the registry
-   */
   addFeature(feature: Feature): void {
     const info = feature.getInfo();
     this.features.set(info.name, feature);
   }
 
-  /**
-   * Get all available features
-   */
   getFeatures(): Feature[] {
     return Array.from(this.features.values());
   }
 
-  /**
-   * Get a specific feature by name
-   */
   getFeature(name: string): Feature | undefined {
     return this.features.get(name);
   }
 
-  /**
-   * Register all available features with the MCP server
-   */
-  async registerAllFeatures(
-    server: McpServer
-  ): Promise<FeatureRegistrationResult[]> {
+  async registerAllFeatures(server: McpServer): Promise<FeatureRegistrationResult[]> {
     const results: FeatureRegistrationResult[] = [];
 
     for (const feature of this.features.values()) {
       const info = feature.getInfo();
 
       try {
-        // Check if feature can be loaded
         if (!feature.canLoad()) {
           const result: FeatureRegistrationResult = {
             success: false,
@@ -107,7 +61,6 @@ export class FeatureRegistry {
           continue;
         }
 
-        // Register the feature
         const result = await feature.register(server);
         results.push(result);
         this.registeredFeatures.set(info.name, result);
@@ -118,19 +71,13 @@ export class FeatureRegistry {
             capabilities.push(`Tools: ${result.toolsRegistered.join(', ')}`);
           }
           if (result.resourcesRegistered?.length) {
-            capabilities.push(
-              `Resources: ${result.resourcesRegistered.join(', ')}`
-            );
+            capabilities.push(`Resources: ${result.resourcesRegistered.join(', ')}`);
           }
           if (result.promptsRegistered?.length) {
-            capabilities.push(
-              `Prompts: ${result.promptsRegistered.join(', ')}`
-            );
+            capabilities.push(`Prompts: ${result.promptsRegistered.join(', ')}`);
           }
           if (result.notificationsRegistered?.length) {
-            capabilities.push(
-              `Notifications: ${result.notificationsRegistered.join(', ')}`
-            );
+            capabilities.push(`Notifications: ${result.notificationsRegistered.join(', ')}`);
           }
 
           this.logger.info(
@@ -138,9 +85,7 @@ export class FeatureRegistry {
               (capabilities.length ? ` - ${capabilities.join(' | ')}` : '')
           );
         } else {
-          this.logger.error(
-            `❌ Feature ${info.name} failed to load: ${result.error}`
-          );
+          this.logger.error(`❌ Feature ${info.name} failed to load: ${result.error}`);
         }
       } catch (error) {
         const result: FeatureRegistrationResult = {
@@ -150,43 +95,25 @@ export class FeatureRegistry {
         };
         results.push(result);
         this.registeredFeatures.set(info.name, result);
-        this.logger.error(
-          `❌ Feature ${info.name} failed to load: ${result.error}`
-        );
+        this.logger.error(`❌ Feature ${info.name} failed to load: ${result.error}`);
       }
     }
 
     return results;
   }
 
-  /**
-   * Get registration results for all features
-   */
   getRegistrationResults(): Map<string, FeatureRegistrationResult> {
     return new Map(this.registeredFeatures);
   }
 
-  /**
-   * Get successfully registered features
-   */
   getSuccessfullyRegisteredFeatures(): FeatureRegistrationResult[] {
-    return Array.from(this.registeredFeatures.values()).filter(
-      result => result.success
-    );
+    return Array.from(this.registeredFeatures.values()).filter(result => result.success);
   }
 
-  /**
-   * Get failed feature registrations
-   */
   getFailedFeatureRegistrations(): FeatureRegistrationResult[] {
-    return Array.from(this.registeredFeatures.values()).filter(
-      result => !result.success
-    );
+    return Array.from(this.registeredFeatures.values()).filter(result => !result.success);
   }
 
-  /**
-   * Clean up all registered features
-   */
   async cleanup(): Promise<void> {
     const cleanupPromises = Array.from(this.features.values())
       .filter(feature => feature.cleanup)
@@ -197,7 +124,4 @@ export class FeatureRegistry {
   }
 }
 
-/**
- * Global feature registry instance
- */
 export const featureRegistry = new FeatureRegistry();

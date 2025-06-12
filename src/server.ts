@@ -14,14 +14,8 @@ import {
   logServerStart,
 } from './infra/logger.js';
 
-/**
- * Server transport mode
- */
 export type ServerMode = 'stdio' | 'http';
 
-/**
- * Create and configure the MCP server with available features
- */
 async function createMcpServer(): Promise<McpServer> {
   const server = new McpServer({
     name: 'backtick-mcp-server',
@@ -36,13 +30,10 @@ async function createMcpServer(): Promise<McpServer> {
     },
   });
 
-  // Initialize and register all features
   initializeFeatures();
   await featureRegistry.registerAllFeatures(server);
 
-  // Log summary using structured logging
-  const successfulFeatures =
-    featureRegistry.getSuccessfullyRegisteredFeatures();
+  const successfulFeatures = featureRegistry.getSuccessfullyRegisteredFeatures();
   const failedFeatures = featureRegistry.getFailedFeatureRegistrations();
 
   logFeatureResults(successfulFeatures, failedFeatures);
@@ -50,9 +41,6 @@ async function createMcpServer(): Promise<McpServer> {
   return server;
 }
 
-/**
- * Start MCP server with STDIO transport
- */
 async function startStdioServer(): Promise<void> {
   const server = await createMcpServer();
   const transport = new StdioServerTransport();
@@ -61,16 +49,12 @@ async function startStdioServer(): Promise<void> {
   logServerStart('stdio');
 }
 
-/**
- * Start MCP server with HTTP transport using StreamableHTTPServerTransport
- */
 async function startHttpServer(port: number = config.PORT): Promise<void> {
   const app = express();
   const serverLogger = createServerLogger();
 
   app.use(express.json());
 
-  // Add CORS headers
   app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
@@ -78,7 +62,6 @@ async function startHttpServer(port: number = config.PORT): Promise<void> {
     next();
   });
 
-  // Health check endpoint
   app.get('/health', (req, res) => {
     res.json({
       status: 'healthy',
@@ -87,7 +70,6 @@ async function startHttpServer(port: number = config.PORT): Promise<void> {
     });
   });
 
-  // MCP endpoint for JSON-RPC over HTTP
   app.post('/mcp', async (req, res) => {
     const requestId = randomUUID();
     const requestLogger = createRequestLogger(requestId);
@@ -95,7 +77,7 @@ async function startHttpServer(port: number = config.PORT): Promise<void> {
     try {
       const server = await createMcpServer();
       const transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: () => randomUUID(), // Generate secure session IDs
+        sessionIdGenerator: () => randomUUID(),
       });
 
       await server.connect(transport);
@@ -120,7 +102,6 @@ async function startHttpServer(port: number = config.PORT): Promise<void> {
     }
   });
 
-  // MCP SSE endpoint for real-time updates
   app.get('/mcp', async (req, res) => {
     const requestId = randomUUID();
     const requestLogger = createRequestLogger(requestId);
@@ -148,7 +129,6 @@ async function startHttpServer(port: number = config.PORT): Promise<void> {
     }
   });
 
-  // MCP DELETE endpoint for session termination
   app.delete('/mcp', async (req, res) => {
     const requestId = randomUUID();
     const requestLogger = createRequestLogger(requestId);
@@ -177,20 +157,12 @@ async function startHttpServer(port: number = config.PORT): Promise<void> {
   });
 
   app.listen(port, () => {
-    serverLogger.info(
-      `🌐 HTTP server listening on port ${port} - MCP endpoints available at /mcp`
-    );
+    serverLogger.info(`🌐 HTTP server listening on port ${port} - MCP endpoints available at /mcp`);
     logServerStart('http', port);
   });
 }
 
-/**
- * Start the MCP server with the specified transport mode
- */
-export async function startServer(
-  mode: ServerMode = 'stdio',
-  port?: number
-): Promise<void> {
+export async function startServer(mode: ServerMode = 'stdio', port?: number): Promise<void> {
   const serverLogger = createServerLogger();
 
   try {

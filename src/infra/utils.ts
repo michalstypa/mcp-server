@@ -1,21 +1,8 @@
-/**
- * Utility functions for common patterns across features
- */
-
-/**
- * Extract error message from unknown error type
- */
 export function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Unknown error';
 }
 
-/**
- * Create standard MCP tool success response with JSON content
- */
-export function createSuccessResponse(
-  data: Record<string, unknown>,
-  message?: string
-) {
+export function createSuccessResponse(data: Record<string, unknown>, message?: string) {
   const responseData = message ? { ...data, message } : data;
 
   return {
@@ -28,9 +15,6 @@ export function createSuccessResponse(
   };
 }
 
-/**
- * Create standard MCP tool error response
- */
 export function createErrorResponse(code: string, error: unknown) {
   const errorMessage = getErrorMessage(error);
 

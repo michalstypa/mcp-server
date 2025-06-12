@@ -7,7 +7,6 @@ import {
   type GetSlotsParams,
 } from './calcom.client.js';
 
-// Mock axios
 vi.mock('axios', () => ({
   default: {
     create: vi.fn(() => ({
@@ -16,7 +15,6 @@ vi.mock('axios', () => ({
   },
 }));
 
-// Mock config
 vi.mock('./calcom.config.js', () => ({
   loadCalcomConfig: vi.fn(() => ({
     CALCOM_API_BASE: 'https://api.cal.com',
@@ -40,10 +38,7 @@ describe('CalcomClient', () => {
     });
 
     it('should create client with custom config', () => {
-      const customClient = new CalcomClient(
-        'custom-token',
-        'https://custom.cal.com'
-      );
+      const customClient = new CalcomClient('custom-token', 'https://custom.cal.com');
       expect(customClient).toBeInstanceOf(CalcomClient);
     });
   });
@@ -112,10 +107,7 @@ describe('CalcomClient', () => {
     it('should fetch slots successfully', async () => {
       const mockSlots: CalcomSlotsResponse = {
         slots: {
-          '2024-01-01': [
-            { time: '2024-01-01T10:00:00Z' },
-            { time: '2024-01-01T11:00:00Z' },
-          ],
+          '2024-01-01': [{ time: '2024-01-01T10:00:00Z' }, { time: '2024-01-01T11:00:00Z' }],
         },
       };
 
@@ -158,9 +150,7 @@ describe('CalcomClient', () => {
 
       mockAxiosInstance.request.mockRejectedValueOnce(apiError);
 
-      await expect(client.getSlots(mockParams)).rejects.toThrow(
-        CalcomClientError
-      );
+      await expect(client.getSlots(mockParams)).rejects.toThrow(CalcomClientError);
     });
 
     it('should handle network errors', async () => {
@@ -169,15 +159,12 @@ describe('CalcomClient', () => {
         message: 'Network Error',
       };
 
-      // Mock should reject for all retry attempts (3 times)
       mockAxiosInstance.request
         .mockRejectedValueOnce(networkError)
         .mockRejectedValueOnce(networkError)
         .mockRejectedValueOnce(networkError);
 
-      await expect(client.getSlots(mockParams)).rejects.toThrow(
-        CalcomClientError
-      );
+      await expect(client.getSlots(mockParams)).rejects.toThrow(CalcomClientError);
     });
   });
 

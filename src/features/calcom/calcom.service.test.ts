@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { CalcomService } from './calcom.service.js';
 
-// Mock the CalcomClient
 const mockGetEventTypes = vi.fn();
 const mockGetSlots = vi.fn();
 
@@ -78,10 +77,7 @@ describe('CalcomService', () => {
         timeZone: 'UTC',
       };
 
-      // This should fail at validation level due to missing eventTypeId
-      await expect(
-        service.getAvailableSlots(mockInput as any)
-      ).rejects.toThrow();
+      await expect(service.getAvailableSlots(mockInput as any)).rejects.toThrow();
     });
   });
 });

@@ -2,7 +2,6 @@ import { describe, it, expect, beforeAll, vi } from 'vitest';
 
 describe('Configuration', () => {
   beforeAll(() => {
-    // Set test environment variables for server config
     vi.stubEnv('PORT', '3000');
     vi.stubEnv('LOG_LEVEL', 'debug');
     vi.stubEnv('NODE_ENV', 'test');
@@ -14,9 +13,7 @@ describe('Configuration', () => {
     expect(typeof config.PORT).toBe('number');
     expect(config.PORT).toBeGreaterThan(0);
     expect(config.PORT).toBeLessThan(65536);
-    expect(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).toContain(
-      config.LOG_LEVEL
-    );
+    expect(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).toContain(config.LOG_LEVEL);
     expect(['development', 'production', 'test']).toContain(config.NODE_ENV);
   });
 
@@ -35,7 +32,6 @@ describe('Configuration', () => {
     expect(typeof dev).toBe('boolean');
     expect(typeof test).toBe('boolean');
 
-    // Only one should be true
     const trueCount = [prod, dev, test].filter(Boolean).length;
     expect(trueCount).toBe(1);
   });
@@ -43,7 +39,6 @@ describe('Configuration', () => {
   it('should have proper TypeScript types', async () => {
     const { config } = await import('./config');
 
-    // Verify the config object has the expected structure (generic server config only)
     expect(config).toHaveProperty('PORT');
     expect(config).toHaveProperty('LOG_LEVEL');
     expect(config).toHaveProperty('NODE_ENV');
