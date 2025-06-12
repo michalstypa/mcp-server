@@ -4,10 +4,17 @@ import { z } from 'zod';
  * Input validation schema for slot requests
  */
 export const GetSlotsInputSchema = z.object({
-  start: z.string().datetime(),
-  end: z.string().datetime(),
-  eventTypeId: z.number(),
-  timeZone: z.string().default('UTC').optional(),
+  start: z
+    .string()
+    .datetime()
+    .describe('Start date and time in ISO 8601 format'),
+  end: z.string().datetime().describe('End date and time in ISO 8601 format'),
+  eventTypeId: z.number().describe('Event type ID (required)'),
+  timeZone: z
+    .string()
+    .default('UTC')
+    .optional()
+    .describe('Time zone (default: UTC)'),
 });
 
 export type GetSlotsInput = z.infer<typeof GetSlotsInputSchema>;

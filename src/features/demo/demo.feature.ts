@@ -1,5 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { getErrorMessage } from '../../infra/utils.js';
 import type {
   Feature,
   FeatureInfo,
@@ -138,10 +139,7 @@ export class DemoFeature implements Feature {
     } catch (error) {
       const result: FeatureRegistrationResult = {
         success: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : 'Unknown error during Demo feature registration',
+        error: getErrorMessage(error),
         info: this.getInfo(),
       };
 

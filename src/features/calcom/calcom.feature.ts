@@ -2,6 +2,12 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { canLoadCalcomFeature, loadCalcomConfig } from './calcom.config.js';
 import { calcomService } from './calcom.service.js';
+import { GetSlotsInputSchema } from './calcom.types.js';
+import {
+  createSuccessResponse,
+  createErrorResponse,
+  getErrorMessage,
+} from '../../infra/utils.js';
 import type {
   Feature,
   FeatureInfo,
@@ -21,9 +27,8 @@ export class CalcomFeature implements Feature {
   getInfo(): FeatureInfo {
     return {
       name: 'Cal.com',
-      description:
-        'Integrates with Cal.com API to provide meeting slot availability',
-      version: '1.0.0',
+      description: 'Integrates with Cal.com API',
+      version: '1.1.0',
       enabled: true,
     };
   }
@@ -55,44 +60,12 @@ export class CalcomFeature implements Feature {
         async () => {
           try {
             const eventTypes = await calcomService.getEventTypes();
-
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify(
-                    {
-                      eventTypes: eventTypes,
-                      message: 'Available Cal.com event types',
-                    },
-                    null,
-                    2
-                  ),
-                },
-              ],
-            };
+            return createSuccessResponse(
+              { eventTypes },
+              'Available Cal.com event types'
+            );
           } catch (error) {
-            const errorMessage =
-              error instanceof Error ? error.message : 'Unknown error';
-
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify(
-                    {
-                      error: {
-                        code: 'EVENT_TYPES_ERROR',
-                        message: errorMessage,
-                      },
-                    },
-                    null,
-                    2
-                  ),
-                },
-              ],
-              isError: true,
-            };
+            return createErrorResponse('EVENT_TYPES_ERROR', error);
           }
         }
       );
@@ -102,21 +75,7 @@ export class CalcomFeature implements Feature {
       server.tool(
         'GET_AVAILABLE_SLOTS',
         'Get available meeting slots from Cal.com',
-        {
-          start: z
-            .string()
-            .datetime()
-            .describe('Start date and time in ISO 8601 format'),
-          end: z
-            .string()
-            .datetime()
-            .describe('End date and time in ISO 8601 format'),
-          eventTypeId: z.number().describe('Event type ID (required)'),
-          timeZone: z
-            .string()
-            .default('UTC')
-            .describe('Time zone (default: UTC)'),
-        },
+        GetSlotsInputSchema.shape,
         async ({ start, end, eventTypeId, timeZone }) => {
           try {
             const result = await calcomService.getAvailableSlots({
@@ -125,43 +84,12 @@ export class CalcomFeature implements Feature {
               eventTypeId,
               timeZone,
             });
-
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify(
-                    {
-                      slots: result,
-                      message: 'Available meeting slots',
-                    },
-                    null,
-                    2
-                  ),
-                },
-              ],
-            };
+            return createSuccessResponse(
+              { slots: result },
+              'Available meeting slots'
+            );
           } catch (error) {
-            const errorMessage =
-              error instanceof Error ? error.message : 'Unknown error';
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify(
-                    {
-                      error: {
-                        code: 'AVAILABLE_SLOTS_ERROR',
-                        message: errorMessage,
-                      },
-                    },
-                    null,
-                    2
-                  ),
-                },
-              ],
-              isError: true,
-            };
+            return createErrorResponse('AVAILABLE_SLOTS_ERROR', error);
           }
         }
       );
@@ -225,8 +153,7 @@ Once you select a meeting type, I'll use the GET_AVAILABLE_SLOTS tool to check a
               ],
             };
           } catch (error) {
-            const errorMessage =
-              error instanceof Error ? error.message : 'Unknown error';
+            const errorMessage = getErrorMessage(error);
             return {
               messages: [
                 {
@@ -298,8 +225,7 @@ The event type IDs are: ${eventTypes.map(type => `${type.title} (ID: ${type.id})
               ],
             };
           } catch (error) {
-            const errorMessage =
-              error instanceof Error ? error.message : 'Unknown error';
+            const errorMessage = getErrorMessage(error);
             return {
               messages: [
                 {
@@ -409,8 +335,7 @@ Each event type contains:
         resourcesRegistered,
       };
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage = getErrorMessage(error);
       this.logger.error('Failed to register Cal.com feature:', errorMessage);
 
       return {
